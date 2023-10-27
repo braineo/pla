@@ -116,8 +116,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         let diverged_count: usize = package_versions
-            .iter()
-            .map(|(_, value)| if value.len() > 1 { 1 } else { 0 })
+            .values()
+            .map(|value| if value.len() > 1 { 1 } else { 0 })
             .sum();
 
         info!(
