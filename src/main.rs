@@ -130,11 +130,32 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         table.set_header(vec!["package", "versions"]);
 
-        for (package_name, versions) in package_versions {
+        let mut filtered_rows: Vec<_> = package_versions
+            .iter()
+            .filter_map(|(package_name, versions)| {
+                if versions.len() > 1 {
+                    let mut version_vec = Vec::from_iter(versions);
+                    version_vec.sort();
+
+                    Some((
+                        package_name.clone(),
+                        version_vec
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        filtered_rows.sort_by_key(|(name, _)| name.clone());
+
+        for (package_name, versions) in filtered_rows {
             if versions.len() > 1 {
-                let mut version_vec = versions.into_iter().collect::<Vec<_>>();
-                version_vec.sort();
-                table.add_row(vec![package_name, version_vec.join(", ")]);
+                table.add_row(vec![package_name, versions]);
             }
         }
         println!("{table}")
