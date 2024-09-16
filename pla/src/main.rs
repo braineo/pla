@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                     let versions = package_versions
                         .entry(package_name.to_string())
-                        .or_insert(HashSet::new());
+                        .or_default();
                     versions.insert(dependency.version);
                 }
             }
