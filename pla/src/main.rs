@@ -57,7 +57,7 @@ fn cli() -> Command {
         .about("analyze package lock for duplicated packages")
         .arg(
             Arg::new("path")
-                .help("path to packge-lock.json")
+                .help("path to package-lock.json")
                 .value_name("FILE")
                 .value_parser(value_parser!(PathBuf)),
         )
