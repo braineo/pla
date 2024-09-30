@@ -20,6 +20,8 @@ pub trait Bump {
     fn increment_patch(&self) -> Self;
     /// Increments the prerelease version number.
     fn increment_prerelease(&self) -> Self;
+    /// Add identifiers to version for prerelease
+    fn append_prerelease_identifiers(&self, identifiers: &str) -> Self;
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, ValueEnum)]
@@ -65,7 +67,15 @@ impl Bump for Version {
 
     fn increment_prerelease(&self) -> Self {
         let next_pre = increment_last_identifier(self.pre.as_str());
-        let next_pre = semver::Prerelease::new(&next_pre).expect("pre release increment failed. Please report this issue to https://github.com/MarcoIeni/release-plz/issues");
+        let next_pre = semver::Prerelease::new(&next_pre).expect("pre release increment failed.");
+        Self {
+            pre: next_pre,
+            ..self.clone()
+        }
+    }
+
+    fn append_prerelease_identifiers(&self, identifiers: &str) -> Self {
+        let next_pre = semver::Prerelease::new(identifiers).expect("pre release increment failed.");
         Self {
             pre: next_pre,
             ..self.clone()
@@ -74,6 +84,9 @@ impl Bump for Version {
 }
 
 fn increment_last_identifier(release: &str) -> String {
+    if let Ok(release_number) = release.parse::<u32>() {
+        return (release_number + 1).to_string();
+    }
     match release.rsplit_once('.') {
         Some((left, right)) => {
             if let Ok(right_num) = right.parse::<u32>() {
@@ -99,6 +112,14 @@ fn cli() -> Command {
                 .long("path")
                 .required(false)
                 .value_parser(value_parser!(PathBuf)),
+        )
+        .arg(
+            Arg::new("prerelease")
+                .long("prerelease")
+                .required(false)
+                .num_args(0..=1)
+                .default_missing_value("")
+                .value_parser(value_parser!(String)),
         )
 }
 
@@ -140,11 +161,32 @@ fn main() -> anyhow::Result<()> {
         bail!("cannot find version in package.json");
     };
 
+    let prerelease = matches.get_one::<String>("prerelease");
+    info!("prerelease {:?}", prerelease);
+
     let next_version = if let Some(bump_type) = matches.get_one::<BumpType>("bump_type") {
         match bump_type {
             BumpType::Major => version.increment_major().to_string(),
             BumpType::Minor => version.increment_minor().to_string(),
             BumpType::Patch => version.increment_patch().to_string(),
+        }
+    } else if let Some(prerelease) = matches.get_one::<String>("prerelease") {
+        if version.pre.is_empty() {
+            if prerelease.is_empty() {
+                version.append_prerelease_identifiers("0").to_string()
+            } else {
+                version
+                    .append_prerelease_identifiers(&format!("{}.0", prerelease))
+                    .to_string()
+            }
+        } else if !prerelease.is_empty() {
+            bail!(
+                "prerelease identifiers exists {} but got specified as {}",
+                version.pre,
+                prerelease
+            );
+        } else {
+            version.increment_prerelease().to_string()
         }
     } else {
         bail!("need to bump to at lease one of major, minor or patch")
