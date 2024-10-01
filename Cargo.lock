@@ -122,6 +122,7 @@ dependencies = [
  "config",
  "env_logger 0.11.5",
  "log",
+ "owo-colors",
  "semver",
  "serde",
  "serde_json",
@@ -536,6 +537,12 @@ dependencies = [
  "dlv-list",
  "hashbrown 0.13.2",
 ]
+
+[[package]]
+name = "owo-colors"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb37767f6569cd834a413442455e0f066d0d522de8630436e2a1761d9726ba56"
 
 [[package]]
 name = "parking_lot"

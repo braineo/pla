@@ -1,12 +1,13 @@
+use crate::{repo::Repo, settings::Settings};
 use anyhow::bail;
 use clap::{value_parser, Arg, Command, ValueEnum};
 use config::Config;
 use log::{debug, info};
+use owo_colors::{colors::xterm, OwoColorize};
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::{env, fs::File, path::PathBuf};
 
-use crate::{repo::Repo, settings::Settings};
+use std::{env, fs::File, path::PathBuf};
 
 pub mod repo;
 pub mod settings;
@@ -121,6 +122,11 @@ fn cli() -> Command {
                 .default_missing_value("")
                 .value_parser(value_parser!(String)),
         )
+        .arg(
+            Arg::new("dryrun")
+                .long("dryrun")
+                .action(clap::ArgAction::SetTrue),
+        )
 }
 
 fn main() -> anyhow::Result<()> {
@@ -191,6 +197,32 @@ fn main() -> anyhow::Result<()> {
     } else {
         bail!("need to bump to at lease one of major, minor or patch")
     };
+
+    if matches.get_flag("dryrun") {
+        println!(
+            "{} {}",
+            "will bump version to".bg::<xterm::Gray>(),
+            next_version.green()
+        );
+
+        println!(
+            "{} {}",
+            "will bump files".bg::<xterm::Gray>(),
+            std::iter::once(package_json_file_name)
+                .chain(
+                    settings
+                        .bump_files
+                        .as_ref()
+                        .into_iter()
+                        .flatten()
+                        .map(|s| s.as_str())
+                )
+                .collect::<Vec<_>>()
+                .join(", ")
+                .green()
+        );
+        return Ok(());
+    }
 
     info!("bump to version {}", next_version);
     project_repo.bump_package_json(package_json_file_name, &next_version)?;
