@@ -1,13 +1,14 @@
 use crate::{repo::Repo, settings::Settings};
 use anyhow::bail;
-use clap::{value_parser, Arg, Command, ValueEnum};
+use clap::{value_parser, Arg, ArgAction, Command, ValueEnum};
+use clap_complete::{generate, Generator, Shell};
 use config::Config;
 use log::{debug, info};
 use owo_colors::{colors::xterm, OwoColorize};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use std::{env, fs::File, path::PathBuf};
+use std::{env, fs::File, io, path::PathBuf};
 
 pub mod repo;
 pub mod settings;
@@ -106,17 +107,23 @@ fn cli() -> Command {
         .arg(
             Arg::new("bump_type")
                 .long("type")
+                .value_name("BUMP_TYPE")
+                .help("which version to bump to")
                 .value_parser(value_parser!(BumpType)),
         )
         .arg(
             Arg::new("project_path")
                 .long("path")
+                .value_name("PATH")
+                .help("the directory to execute bump")
                 .required(false)
                 .value_parser(value_parser!(PathBuf)),
         )
         .arg(
             Arg::new("prerelease")
                 .long("prerelease")
+                .value_name("IDENTIFIER")
+                .help("specify a IDENTIFIER for prerelesae, prerelease version will be -IDENTIFIER.0 or -0")
                 .required(false)
                 .num_args(0..=1)
                 .default_missing_value("")
@@ -125,14 +132,38 @@ fn cli() -> Command {
         .arg(
             Arg::new("dryrun")
                 .long("dryrun")
+                .help("skip file change and commit")
                 .action(clap::ArgAction::SetTrue),
         )
+        .subcommand(
+            Command::new("completions").arg(
+                Arg::new("shell")
+                    .long("shell")
+                    .action(ArgAction::Set)
+                    .value_parser(value_parser!(Shell)),
+            ),
+        )
+}
+
+fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
+    generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
 }
 
 fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_default_env().init();
 
     let matches = cli().get_matches();
+
+    if let Some(("completions", completions_matches)) = matches.subcommand() {
+        if let Some(shell) = completions_matches.get_one::<Shell>("shell").copied() {
+            let mut cmd = cli();
+
+            print_completions(shell, &mut cmd);
+        } else {
+            eprintln!("cannot generate auto completions");
+        }
+        return Ok(());
+    }
 
     let project_repo = if let Some(project_path) = matches.get_one::<PathBuf>("project_path") {
         Repo::new(project_path.clone())?
