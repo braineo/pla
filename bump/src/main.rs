@@ -213,7 +213,7 @@ fn main() -> anyhow::Result<()> {
                 version.append_prerelease_identifiers("0").to_string()
             } else {
                 version
-                    .append_prerelease_identifiers(&format!("{}.0", prerelease))
+                    .append_prerelease_identifiers(&format!("{prerelease}.0"))
                     .to_string()
             }
         } else if !prerelease.is_empty() {
