@@ -23,12 +23,12 @@ impl Repo {
     }
 
     pub fn commit_and_tag_release(&self, next_version: &str) -> anyhow::Result<String> {
-        let message = format!("chore(release): {}", next_version);
+        let message = format!("chore(release): {next_version}");
         run_git_command(&self.directory, &["commit", "-m", &message])?;
 
         run_git_command(
             &self.directory,
-            &["tag", "-a", &format!("v{}", next_version), "-m", &message],
+            &["tag", "-a", &format!("v{next_version}"), "-m", &message],
         )?;
 
         Ok(String::from(""))
