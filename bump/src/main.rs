@@ -8,7 +8,12 @@ use owo_colors::{colors::xterm, OwoColorize};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use std::{env, fs::File, io, path::PathBuf};
+use std::{
+    env,
+    fs::File,
+    io,
+    path::{Path, PathBuf},
+};
 
 pub mod repo;
 pub mod settings;
@@ -262,6 +267,11 @@ fn main() -> anyhow::Result<()> {
     debug!("bump other files {:?}", settings.bump_files);
     if let Some(bump_files) = settings.bump_files {
         for bump_file in bump_files {
+            if !Path::new(&bump_file).exists() {
+                debug!("{bump_file} does not exist, skip.");
+                continue;
+            }
+
             project_repo.bump_package_json(&bump_file, &next_version)?;
             project_repo.stage_file(&bump_file)?;
         }
