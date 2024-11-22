@@ -176,18 +176,10 @@ fn main() -> anyhow::Result<()> {
         Repo::new(env::current_dir()?)?
     };
 
-    let default_settings = Settings {
-        bump_files: Some(vec![String::from("package-lock.json")]),
-    };
-    let settings = match Config::builder()
+    let settings: Settings = Config::builder()
         .add_source(config::File::from(project_repo.directory.join("bump")))
-        .build()
-    {
-        Ok(config_builder) => config_builder
-            .try_deserialize::<Settings>()
-            .unwrap_or(default_settings),
-        _ => default_settings,
-    };
+        .build()?
+        .try_deserialize::<Settings>()?;
 
     let package_json_file_name = "package.json";
 
@@ -236,23 +228,17 @@ fn main() -> anyhow::Result<()> {
 
     if matches.get_flag("dryrun") {
         println!(
-            "{} {}",
+            "{} {}{}",
             "will bump version to".bg::<xterm::Gray>(),
+            settings.tag_prefix.green(),
             next_version.green()
         );
 
         println!(
             "{} {}",
             "will bump files".bg::<xterm::Gray>(),
-            std::iter::once(package_json_file_name)
-                .chain(
-                    settings
-                        .bump_files
-                        .as_ref()
-                        .into_iter()
-                        .flatten()
-                        .map(|s| s.as_str())
-                )
+            std::iter::once(package_json_file_name.to_string())
+                .chain(settings.bump_files.into_iter())
                 .collect::<Vec<_>>()
                 .join(", ")
                 .green()
@@ -265,19 +251,18 @@ fn main() -> anyhow::Result<()> {
     project_repo.stage_file(package_json_file_name)?;
 
     debug!("bump other files {:?}", settings.bump_files);
-    if let Some(bump_files) = settings.bump_files {
-        for bump_file in bump_files {
-            if !Path::new(&bump_file).exists() {
-                debug!("{bump_file} does not exist, skip.");
-                continue;
-            }
 
-            project_repo.bump_package_json(&bump_file, &next_version)?;
-            project_repo.stage_file(&bump_file)?;
+    for bump_file in settings.bump_files {
+        if !Path::new(&bump_file).exists() {
+            debug!("{bump_file} does not exist, skip.");
+            continue;
         }
+
+        project_repo.bump_package_json(&bump_file, &next_version)?;
+        project_repo.stage_file(&bump_file)?;
     }
 
-    project_repo.commit_and_tag_release(&next_version)?;
+    project_repo.commit_and_tag_release(&next_version, &settings.tag_prefix)?;
 
     Ok(())
 }
