@@ -177,7 +177,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let settings: Settings = Config::builder()
-        .add_source(config::File::from(project_repo.directory.join("bump")))
+        .add_source(config::File::from(project_repo.directory.join("bump")).required(false))
         .build()?
         .try_deserialize::<Settings>()?;
 
