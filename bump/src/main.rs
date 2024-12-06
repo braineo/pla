@@ -29,6 +29,8 @@ pub trait Bump {
     fn increment_prerelease(&self) -> Self;
     /// Add identifiers to version for prerelease
     fn append_prerelease_identifiers(&self, identifiers: &str) -> Self;
+    /// Remove prerelease from version
+    fn convert_prerelease_to_release(&self) -> Self;
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, ValueEnum)]
@@ -85,6 +87,13 @@ impl Bump for Version {
         let next_pre = semver::Prerelease::new(identifiers).expect("pre release increment failed.");
         Self {
             pre: next_pre,
+            ..self.clone()
+        }
+    }
+
+    fn convert_prerelease_to_release(&self) -> Self {
+        Self {
+            pre: semver::Prerelease::EMPTY,
             ..self.clone()
         }
     }
@@ -225,7 +234,7 @@ fn main() -> anyhow::Result<()> {
             next_version.increment_prerelease()
         }
     } else {
-        next_version
+        next_version.convert_prerelease_to_release()
     };
 
     if version == next_version {
