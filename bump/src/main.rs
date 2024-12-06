@@ -198,33 +198,41 @@ fn main() -> anyhow::Result<()> {
     let prerelease = matches.get_one::<String>("prerelease");
     info!("prerelease {:?}", prerelease);
 
-    let next_version = if let Some(bump_type) = matches.get_one::<BumpType>("bump_type") {
+    let mut next_version = if let Some(bump_type) = matches.get_one::<BumpType>("bump_type") {
         match bump_type {
-            BumpType::Major => version.increment_major().to_string(),
-            BumpType::Minor => version.increment_minor().to_string(),
-            BumpType::Patch => version.increment_patch().to_string(),
+            BumpType::Major => version.increment_major(),
+            BumpType::Minor => version.increment_minor(),
+            BumpType::Patch => version.increment_patch(),
         }
-    } else if let Some(prerelease) = matches.get_one::<String>("prerelease") {
-        if version.pre.is_empty() {
+    } else {
+        version.clone()
+    };
+
+    next_version = if let Some(prerelease) = matches.get_one::<String>("prerelease") {
+        if next_version.pre.is_empty() {
             if prerelease.is_empty() {
-                version.append_prerelease_identifiers("0").to_string()
+                next_version.append_prerelease_identifiers("0")
             } else {
-                version
-                    .append_prerelease_identifiers(&format!("{prerelease}.0"))
-                    .to_string()
+                next_version.append_prerelease_identifiers(&format!("{prerelease}.0"))
             }
         } else if !prerelease.is_empty() {
             bail!(
                 "prerelease identifiers exists {} but got specified as {}",
-                version.pre,
+                next_version.pre,
                 prerelease
             );
         } else {
-            version.increment_prerelease().to_string()
+            next_version.increment_prerelease()
         }
     } else {
-        bail!("need to bump to at lease one of major, minor or patch")
+        next_version
     };
+
+    if version == next_version {
+        bail!("no change in version, exit");
+    }
+
+    let next_version = next_version.to_string();
 
     if matches.get_flag("dryrun") {
         println!(
