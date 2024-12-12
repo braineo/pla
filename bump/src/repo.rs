@@ -22,14 +22,15 @@ impl Repo {
         run_git_command(&self.directory, &["add", file_name])
     }
 
-    pub fn commit_and_tag_release(
-        &self,
-        next_version: &str,
-        tag_prefix: &str,
-    ) -> anyhow::Result<String> {
+    pub fn commit_changes(&self, next_version: &str) -> anyhow::Result<String> {
         let message = format!("chore(release): {next_version}");
         run_git_command(&self.directory, &["commit", "-m", &message])?;
 
+        Ok(String::from(""))
+    }
+
+    pub fn tag_release(&self, next_version: &str, tag_prefix: &str) -> anyhow::Result<String> {
+        let message = format!("chore(release): {next_version}");
         run_git_command(
             &self.directory,
             &[
@@ -44,11 +45,11 @@ impl Repo {
         Ok(String::from(""))
     }
 
-    pub fn bump_package_json(&self, file_path: &str, next_version: &str) -> anyhow::Result<()> {
+    pub fn bump_json(&self, file_path: &str, next_version: &str) -> anyhow::Result<()> {
         info!("bump {} to {}", file_path, next_version);
         let full_path = self.directory.join(file_path);
-        let package_json_file = File::open(&full_path)?;
-        let mut package_json: serde_json::Value = serde_json::from_reader(package_json_file)?;
+        let json_file = File::open(&full_path)?;
+        let mut package_json: serde_json::Value = serde_json::from_reader(json_file)?;
 
         if let Some(version) = package_json.get_mut("version") {
             *version = json!(next_version);

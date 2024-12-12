@@ -43,6 +43,14 @@ pub enum BumpType {
     Patch,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, ValueEnum, PartialOrd, Ord)]
+pub enum Action {
+    /// Make new commit for changes
+    Commit,
+    /// Tag the latest commit
+    Tag,
+}
+
 impl Bump for Version {
     // taken from https://github.com/killercup/cargo-edit/blob/643e9253a84db02c52a7fa94f07d786d281362ab/src/version.rs#L38
     fn increment_major(&self) -> Self {
@@ -144,9 +152,17 @@ fn cli() -> Command {
                 .value_parser(value_parser!(String)),
         )
         .arg(
+            Arg::new("skip")
+                .long("skip")
+                .value_name("ACTION")
+                .help("skip commit or tag")
+                .action(clap::ArgAction::Append)
+                .value_parser(value_parser!(Action))
+        )
+        .arg(
             Arg::new("dryrun")
                 .long("dryrun")
-                .help("skip file change and commit")
+                .help("preview what will happen to the repo")
                 .action(clap::ArgAction::SetTrue),
         )
         .subcommand(
@@ -243,6 +259,14 @@ fn main() -> anyhow::Result<()> {
 
     let next_version = next_version.to_string();
 
+    let mut skip_actions: Vec<Action> = matches
+        .get_many::<Action>("skip")
+        .unwrap_or_default()
+        .copied()
+        .collect();
+    skip_actions.sort();
+    skip_actions.dedup();
+
     if matches.get_flag("dryrun") {
         println!(
             "{} {}{}",
@@ -251,20 +275,34 @@ fn main() -> anyhow::Result<()> {
             next_version.green()
         );
 
+        let file_names = std::iter::once(package_json_file_name.to_string())
+            .chain(settings.bump_files)
+            .collect::<Vec<_>>()
+            .join(", ");
+
         println!(
             "{} {}",
             "will bump files".bg::<xterm::Gray>(),
-            std::iter::once(package_json_file_name.to_string())
-                .chain(settings.bump_files.into_iter())
-                .collect::<Vec<_>>()
-                .join(", ")
-                .green()
+            file_names.green(),
         );
+
+        if !skip_actions.contains(&Action::Commit) {
+            println!(
+                "{} {}",
+                "will commit files".bg::<xterm::Gray>(),
+                file_names.green()
+            );
+
+            if !skip_actions.contains(&Action::Tag) {
+                println!("{}", "will tag version".bg::<xterm::Gray>(),);
+            }
+        }
+
         return Ok(());
     }
 
     info!("bump to version {}", next_version);
-    project_repo.bump_package_json(package_json_file_name, &next_version)?;
+    project_repo.bump_json(package_json_file_name, &next_version)?;
     project_repo.stage_file(package_json_file_name)?;
 
     debug!("bump other files {:?}", settings.bump_files);
@@ -275,11 +313,17 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        project_repo.bump_package_json(&bump_file, &next_version)?;
+        project_repo.bump_json(&bump_file, &next_version)?;
         project_repo.stage_file(&bump_file)?;
     }
 
-    project_repo.commit_and_tag_release(&next_version, &settings.tag_prefix)?;
+    if !skip_actions.contains(&Action::Commit) {
+        project_repo.commit_changes(&next_version)?;
+
+        if !skip_actions.contains(&Action::Tag) {
+            project_repo.tag_release(&next_version, &settings.tag_prefix)?;
+        }
+    }
 
     Ok(())
 }
