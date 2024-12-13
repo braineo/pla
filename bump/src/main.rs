@@ -50,7 +50,10 @@ fn cli() -> Command {
             Arg::new("prerelease")
                 .long("prerelease")
                 .value_name("IDENTIFIER")
-                .help("specify a IDENTIFIER for prerelesae, prerelease version will be -IDENTIFIER.0 or -0")
+                .help(
+                    "specify a IDENTIFIER for prerelesae, \
+prerelease version will be -IDENTIFIER.0 or -0",
+                )
                 .required(false)
                 .num_args(0..=1)
                 .default_missing_value("")
@@ -62,7 +65,7 @@ fn cli() -> Command {
                 .value_name("ACTION")
                 .help("skip commit or tag")
                 .action(clap::ArgAction::Append)
-                .value_parser(value_parser!(Action))
+                .value_parser(value_parser!(Action)),
         )
         .arg(
             Arg::new("dryrun")
@@ -77,6 +80,12 @@ fn cli() -> Command {
                     .action(ArgAction::Set)
                     .value_parser(value_parser!(Shell)),
             ),
+        )
+        .arg(
+            Arg::new("interactive")
+                .long("interactive")
+                .help("bump version interactively")
+                .action(clap::ArgAction::SetTrue),
         )
 }
 
