@@ -160,7 +160,7 @@ fn main() -> anyhow::Result<()> {
             next_version.increment_prerelease()
         }
     } else {
-        next_version.convert_prerelease_to_release()
+        next_version
     };
 
     if version == next_version {
