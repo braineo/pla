@@ -3,6 +3,7 @@ use anyhow::bail;
 use bump_version::{BumpType, BumpVersion};
 use clap::{value_parser, Arg, ArgAction, Command, ValueEnum};
 use clap_complete::{generate, Generator, Shell};
+use cli::prompt_version_select;
 use config::Config;
 use log::{debug, info};
 use owo_colors::{colors::xterm, OwoColorize};
@@ -17,6 +18,7 @@ use std::{
 };
 
 pub mod bump_version;
+pub mod cli;
 pub mod repo;
 pub mod settings;
 
@@ -80,12 +82,6 @@ prerelease version will be -IDENTIFIER.0 or -0",
                     .action(ArgAction::Set)
                     .value_parser(value_parser!(Shell)),
             ),
-        )
-        .arg(
-            Arg::new("interactive")
-                .long("interactive")
-                .help("bump version interactively")
-                .action(clap::ArgAction::SetTrue),
         )
 }
 
@@ -168,7 +164,13 @@ fn main() -> anyhow::Result<()> {
     };
 
     if version == next_version {
-        bail!("no change in version, exit");
+        debug!("no change in version, prompt");
+        next_version = prompt_version_select(&version);
+    }
+
+    if version == next_version {
+        debug!("just no change in version, exit");
+        return Ok(());
     }
 
     let next_version = next_version.to_string();
