@@ -22,7 +22,7 @@ impl Display for VersionLabel {
     }
 }
 
-pub fn prompt_version_select(current_version: &Version) -> Version {
+pub fn prompt_version_select(current_version: &Version, prerelease_identifier: &str) -> Version {
     let mut options = vec![
         VersionLabel::new("major", current_version.increment_major()),
         VersionLabel::new("minor", current_version.increment_minor()),
@@ -48,19 +48,19 @@ pub fn prompt_version_select(current_version: &Version) -> Version {
             "pre-patch",
             current_version
                 .increment_patch()
-                .append_prerelease_identifiers("beta.0"),
+                .append_prerelease_identifiers(prerelease_identifier),
         ),
         VersionLabel::new(
             "pre-minor",
             current_version
                 .increment_minor()
-                .append_prerelease_identifiers("beta.0"),
+                .append_prerelease_identifiers(prerelease_identifier),
         ),
         VersionLabel::new(
             "pre-major",
             current_version
                 .increment_major()
-                .append_prerelease_identifiers("beta.0"),
+                .append_prerelease_identifiers(prerelease_identifier),
         ),
         VersionLabel::new("current", current_version.clone()),
     ]);

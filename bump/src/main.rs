@@ -49,8 +49,8 @@ fn cli() -> Command {
                 .value_parser(value_parser!(PathBuf)),
         )
         .arg(
-            Arg::new("prerelease")
-                .long("prerelease")
+            Arg::new("pre_id")
+                .long("pre-id")
                 .value_name("IDENTIFIER")
                 .help(
                     "specify a IDENTIFIER for prerelesae, \
@@ -130,42 +130,34 @@ fn main() -> anyhow::Result<()> {
         bail!("cannot find version in package.json");
     };
 
-    let prerelease = matches.get_one::<String>("prerelease");
-    info!("prerelease {:?}", prerelease);
+    let prerelease_identifier = matches
+        .get_one::<String>("pre_id")
+        .map(|pre_id| format!("{pre_id}.0"))
+        .unwrap_or("0".to_string());
 
     let mut next_version = if let Some(bump_type) = matches.get_one::<BumpType>("bump_type") {
         match bump_type {
             BumpType::Major => version.increment_major(),
             BumpType::Minor => version.increment_minor(),
             BumpType::Patch => version.increment_patch(),
+            BumpType::PreMajor => version
+                .increment_major()
+                .append_prerelease_identifiers(&prerelease_identifier),
+            BumpType::PreMinor => version
+                .increment_minor()
+                .append_prerelease_identifiers(&prerelease_identifier),
+            BumpType::PrePatch => version
+                .increment_patch()
+                .append_prerelease_identifiers(&prerelease_identifier),
+            BumpType::Prerelease => version.increment_prerelease(),
         }
     } else {
         version.clone()
     };
 
-    next_version = if let Some(prerelease) = matches.get_one::<String>("prerelease") {
-        if next_version.pre.is_empty() {
-            if prerelease.is_empty() {
-                next_version.append_prerelease_identifiers("0")
-            } else {
-                next_version.append_prerelease_identifiers(&format!("{prerelease}.0"))
-            }
-        } else if !prerelease.is_empty() {
-            bail!(
-                "prerelease identifiers exists {} but got specified as {}",
-                next_version.pre,
-                prerelease
-            );
-        } else {
-            next_version.increment_prerelease()
-        }
-    } else {
-        next_version
-    };
-
     if version == next_version {
         debug!("no change in version, prompt");
-        next_version = prompt_version_select(&version);
+        next_version = prompt_version_select(&version, &prerelease_identifier);
     }
 
     if version == next_version {

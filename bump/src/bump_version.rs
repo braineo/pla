@@ -25,6 +25,14 @@ pub enum BumpType {
     Minor,
     /// Bump patch version.
     Patch,
+    /// Bump major version for pre-release.
+    PreMajor,
+    /// Bump minor version for pre-release.
+    PreMinor,
+    /// Bump patch version for pre-release.
+    PrePatch,
+    /// Increase prerelease version.
+    Prerelease,
 }
 
 impl BumpVersion for Version {
