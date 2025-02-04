@@ -4,13 +4,13 @@ use crate::{cli::Args, models::*};
 
 use anyhow::Result;
 use chrono::{TimeZone, Utc};
-use dialoguer::{Confirm, Editor};
-use futures::future::try_join_all;
+use dialoguer::Editor;
 
 use indicatif::ProgressBar;
-use ollama_rs::generation::completion::{request::GenerationRequest, GenerationContext};
+use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
-use std::{collections::HashMap, path::PathBuf};
+use regex::Regex;
+use std::collections::HashMap;
 use tempfile::TempDir;
 
 const ISSUE_TEMPLATE: &str = r#"
@@ -33,7 +33,7 @@ pub async fn run(args: Args) -> Result<()> {
     let mm_client = MattermostClient::new(args.mm_url, args.mm_token);
     let gitlab_client = GitLabClient::new(args.gitlab_url, args.gitlab_token, args.project_id);
 
-    let (team_name, post_id) = MattermostClient::parse_permalink(&args.permalink)?;
+    let (_team_name, post_id) = MattermostClient::parse_permalink(&args.permalink)?;
     let thread = mm_client.get_thread(&post_id).await?;
 
     let conversation = get_conversation_from_thread(&thread, &post_id, &mm_client).await?;
@@ -135,7 +135,12 @@ async fn analyze_conversation(conversation: &[Conversation]) -> Result<(String, 
 
     let ollama = Ollama::default();
     let prompt = format!(
-        "Generate a concise GitLab issue title and description from this conversation:\n\n{}\n\nFormat:\ntitle: <Issue Title>\ndescription: <Issue Description>",
+        "Given this conversation, create a concise issue title and description for a developer issue.\n\n\
+Conversation:\n\
+{}\n\n\
+Respond in this exact format with nothing else.\n\
+title: <Issue Title in exactly one line>\n\
+description: <Issue Description that can take multiple lines>",
         formatted_conv
     );
 
@@ -143,18 +148,31 @@ async fn analyze_conversation(conversation: &[Conversation]) -> Result<(String, 
     let response = ollama.generate(req).await?;
 
     let content = response.response;
-    let lines: Vec<&str> = content.lines().collect();
+    let content = Regex::new(r"(?ms)<think>.*?</think>\n?")?
+        .replace_all(&content, "")
+        .trim()
+        .to_string();
+
+    let mut lines = content.lines();
 
     let title = lines
-        .get(0)
-        .and_then(|line| line.split_once(':').map(|(_, t)| t.trim()))
+        .next()
+        .map(|line| line.trim_start_matches("title:").trim())
         .unwrap_or("Untitled Issue")
         .to_string();
 
     let description = lines
-        .get(1..)
-        .map(|desc_lines| desc_lines.join("\n").trim().to_string())
-        .unwrap_or_else(|| "No description provided.".to_string());
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_start_matches("description:")
+        .trim()
+        .to_string();
+
+    let description = if description.is_empty() {
+        "No description provided.".to_string()
+    } else {
+        description
+    };
 
     Ok((title, description))
 }
