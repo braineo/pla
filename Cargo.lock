@@ -1350,7 +1350,7 @@ dependencies = [
 
 [[package]]
 name = "mm2glab"
-version = "0.1.1-beta.2"
+version = "0.1.1-beta.3"
 dependencies = [
  "anyhow",
  "async-trait",
