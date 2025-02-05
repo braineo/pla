@@ -6,11 +6,12 @@ use anyhow::Result;
 use chrono::{TimeZone, Utc};
 use dialoguer::Editor;
 
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
 use regex::Regex;
 use std::collections::HashMap;
+use std::time::Duration;
 use tempfile::TempDir;
 
 const ISSUE_TEMPLATE: &str = r#"
@@ -37,8 +38,19 @@ pub async fn run(args: Args) -> Result<()> {
     let thread = mm_client.get_thread(&post_id).await?;
 
     let conversation = get_conversation_from_thread(&thread, &post_id, &mm_client).await?;
-    println!("Generating title and description from LLM");
+
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message("Generating title and description from LLM...");
+    spinner.enable_steady_tick(Duration::from_millis(100));
+
     let (ai_title, ai_description) = analyze_conversation(&conversation, args.ollama_model).await?;
+
+    spinner.finish_and_clear();
 
     let title = args.title.unwrap_or(ai_title);
     let attachments = process_attachments(&thread, &post_id, &mm_client, &gitlab_client).await?;
