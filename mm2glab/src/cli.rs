@@ -37,4 +37,8 @@ pub struct Args {
     /// Skip preview and editor
     #[arg(long)]
     pub no_preview: bool,
+
+    /// Modal
+    #[arg(long, default_value = "deepseek-r1:latest")]
+    pub ollama_model: String,
 }

@@ -38,7 +38,7 @@ pub async fn run(args: Args) -> Result<()> {
 
     let conversation = get_conversation_from_thread(&thread, &post_id, &mm_client).await?;
     println!("Generating title and description from LLM");
-    let (ai_title, ai_description) = analyze_conversation(&conversation).await?;
+    let (ai_title, ai_description) = analyze_conversation(&conversation, args.ollama_model).await?;
 
     let title = args.title.unwrap_or(ai_title);
     let attachments = process_attachments(&thread, &post_id, &mm_client, &gitlab_client).await?;
@@ -126,7 +126,10 @@ async fn get_conversation_from_thread(
     Ok(conversations)
 }
 
-async fn analyze_conversation(conversation: &[Conversation]) -> Result<(String, String)> {
+async fn analyze_conversation(
+    conversation: &[Conversation],
+    ollama_model: String,
+) -> Result<(String, String)> {
     let formatted_conv: String = conversation
         .iter()
         .map(|c| format!("{}: {}", c.username, c.message))
@@ -144,7 +147,7 @@ description: <Issue Description that can take multiple lines>",
         formatted_conv
     );
 
-    let req = GenerationRequest::new("deepseek-r1:14b".into(), prompt);
+    let req = GenerationRequest::new(ollama_model, prompt);
     let response = ollama.generate(req).await?;
 
     let content = response.response;
@@ -289,7 +292,7 @@ fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String
         match choice {
             0 => return Ok((title.to_string(), description.to_string())),
             1 => {
-                if let Ok(Some(edited_content)) = Editor::new().edit(&format!(
+                if let Ok(Some(edited_content)) = Editor::new().extension(".md").edit(&format!(
                     "Title: {}\n{}\n\n{}",
                     title,
                     "=".repeat(80),
