@@ -35,5 +35,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref }}
+          name: "${{ env.BINARY_NAME }} v${{ env.VERSION }}"
           files: target/release/${{ env.BINARY_NAME }}
           generate_release_notes: true
