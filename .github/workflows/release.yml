@@ -8,18 +8,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            ext: ""
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            ext: ""
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
@@ -40,14 +29,11 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Build Binary
-        run: cargo build --release --package ${{ env.BINARY_NAME }} --target ${{ matrix.target }}
-
-      - name: Rename Binary
-        run: mv target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} target/${{ env.BINARY_NAME }}-${{ env.VERSION }}-${{ matrix.target }}${{ matrix.ext }}
+        run: cargo build --release --package $BINARY_NAME
 
       - name: Upload Binary
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref }}
-          files: target/${{ env.BINARY_NAME }}-${{ env.VERSION }}-${{ matrix.target }}${{ matrix.ext }}
+          files: target/release/${{ env.BINARY_NAME }}
           generate_release_notes: true
