@@ -21,7 +21,7 @@ pub trait MattermostApi {
 pub struct MattermostClient {
     client: Client,
     base_url: String,
-    token: String,
+    _token: String,
 }
 
 impl MattermostClient {
@@ -41,7 +41,7 @@ impl MattermostClient {
         Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
-            token,
+            _token: token,
         }
     }
 

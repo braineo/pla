@@ -13,7 +13,7 @@ pub trait GitLabApi {
 pub struct GitLabClient {
     client: Client,
     base_url: String,
-    token: String,
+    _token: String,
     project_id: String,
 }
 
@@ -34,7 +34,7 @@ impl GitLabClient {
         Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
-            token,
+            _token: token,
             project_id,
         }
     }
@@ -67,7 +67,9 @@ impl GitLabApi for GitLabClient {
         );
 
         let file_name = path.file_name().unwrap().to_string_lossy();
-        let file_part = multipart::Part::file(path).await?.file_name(file_name.to_string());
+        let file_part = multipart::Part::file(path)
+            .await?
+            .file_name(file_name.to_string());
 
         let form = multipart::Form::new().part("file", file_part);
 

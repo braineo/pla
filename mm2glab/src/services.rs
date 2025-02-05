@@ -128,7 +128,10 @@ async fn get_conversation_from_thread(
 
                 conversations.push(Conversation {
                     username,
-                    timestamp: Utc.timestamp_millis(post.create_at),
+                    timestamp: Utc
+                        .timestamp_millis_opt(post.create_at)
+                        .single()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid timestamp"))?,
                     message: post.message.clone(),
                 });
             }

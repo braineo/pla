@@ -11,7 +11,6 @@ pub struct Conversation {
 
 #[derive(Debug, Deserialize)]
 pub struct MattermostPost {
-    pub id: String,
     pub user_id: String,
     pub channel_id: String,
     pub message: String,
