@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["bump", "mm2glab", "pla"]
+
+[workspace.metadata.release]
+tag-prefix = "{{crate_name}}-"
+shared-version = false  # Different versions per crate
