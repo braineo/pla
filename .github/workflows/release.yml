@@ -1,0 +1,40 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "bump-v*"
+      - "mm2glab-v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Extract Binary Name and Version
+        id: tag_info
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          BINARY_NAME=$(echo $TAG_NAME | cut -d'-' -f1)
+          VERSION=$(echo $TAG_NAME | cut -d'v' -f2)
+          echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Build Binary
+        run: cargo build --release --package $BINARY_NAME
+
+      - name: Upload Binary
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          name: "${{ env.BINARY_NAME }} v${{ env.VERSION }}"
+          files: target/release/${{ env.BINARY_NAME }}
+          generate_release_notes: true

@@ -1,7 +1,10 @@
 name: CI
 
-on: [push]
-
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 jobs:
   typos:
     runs-on: ubuntu-latest
@@ -10,3 +13,34 @@ jobs:
         uses: actions/checkout@v4
       - name: Check typos
         uses: crate-ci/typos@master
+  lint:
+    name: Run Clippy Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Run Clippy (Fail on Warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  format:
+    name: Check Formatting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Run Rustfmt (Check Mode)
+        run: cargo fmt --all -- --check
