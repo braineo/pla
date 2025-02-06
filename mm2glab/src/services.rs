@@ -5,6 +5,7 @@ use crate::{cli::Args, models::*};
 use anyhow::Result;
 use chrono::{TimeZone, Utc};
 use dialoguer::Editor;
+use termimad::{self, MadSkin};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use ollama_rs::generation::completion::request::GenerationRequest;
@@ -299,12 +300,14 @@ fn format_issue_description(
 }
 
 fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String)> {
-    println!("\n{}", "=".repeat(80));
-    println!("Issue Preview:");
-    println!("{}", "=".repeat(80));
-    println!("\nTitle: {}\n", title);
-    println!("Description:\n{}", description);
-    println!("{}", "=".repeat(80));
+    let skin = MadSkin::default();
+
+    println!(
+        "{}",
+        skin.term_text(&format!(
+            "\n---\nIssue Preview\n---\n# {title}\n\n{description}"
+        ))
+    );
 
     loop {
         let choice = dialoguer::Select::new()

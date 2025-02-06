@@ -21,3 +21,4 @@ ollama-rs = { git = "https://github.com/pepperoni21/ollama-rs.git", rev = "4d519
 edit = "0.1"
 futures = "0.3.31"
 indicatif = "0.17.11"
+termimad = "0.31.2"
