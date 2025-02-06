@@ -117,7 +117,13 @@ async fn get_conversation_from_thread(
                     // Fetch and cache user details
                     let user = mm_client.get_user(user_id).await?;
                     let username = match (user.first_name, user.last_name) {
-                        (Some(first), Some(last)) => format!("{} {}", first, last),
+                        (Some(first), Some(last)) => {
+                            if (!first.is_empty()) && (!last.is_empty()) {
+                                format!("{} {}", first, last)
+                            } else {
+                                user.username
+                            }
+                        }
                         (Some(first), None) => first,
                         (None, Some(last)) => last,
                         (None, None) => user.username,
