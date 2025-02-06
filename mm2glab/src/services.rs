@@ -240,7 +240,7 @@ async fn process_attachments(
                             if content_type.starts_with("image/")
                                 || content_type.starts_with("video/")
                             {
-                                media_links.push(upload.markdown);
+                                media_links.push(format!("{}{{width=60%}}", upload.markdown));
                             } else {
                                 file_links.push(format!("- [{}]({})", filename, upload.url));
                             }
