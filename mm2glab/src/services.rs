@@ -3,7 +3,7 @@ use crate::api::mattermost::{MattermostApi, MattermostClient};
 use crate::{cli::Args, models::*};
 
 use anyhow::Result;
-use chrono::{TimeZone, Utc};
+use chrono::{Local, TimeZone};
 use dialoguer::Editor;
 use termimad::{self, MadSkin};
 
@@ -135,7 +135,7 @@ async fn get_conversation_from_thread(
 
                 conversations.push(Conversation {
                     username,
-                    timestamp: Utc
+                    timestamp: Local
                         .timestamp_millis_opt(post.create_at)
                         .single()
                         .ok_or_else(|| anyhow::anyhow!("Invalid timestamp"))?,

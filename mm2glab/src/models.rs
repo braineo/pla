@@ -1,11 +1,11 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Conversation {
     pub username: String,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: DateTime<Local>,
     pub message: String,
 }
 
