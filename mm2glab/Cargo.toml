@@ -15,9 +15,7 @@ tempfile = "3.10"
 regex = "1.10"
 dialoguer = "0.11"
 async-trait = "0.1"
-# ollama-rs = { version = "0.2", features = ["tokio"] }
-# need ollama-rs to impl error with sync and send to use in async code
-ollama-rs = { git = "https://github.com/pepperoni21/ollama-rs.git", rev = "4d519d8055d6b2b1d1311a04f2e400b16b29a64a" }
+ollama-rs = { version = "0.2", features = ["tokio"] }
 edit = "0.1"
 futures = "0.3.31"
 indicatif = "0.17.11"
