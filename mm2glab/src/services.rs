@@ -5,15 +5,15 @@ use crate::{cli::Args, models::*};
 use anyhow::Result;
 use chrono::{Local, TimeZone};
 use dialoguer::Editor;
-use termimad::{self, MadSkin};
-
 use indicatif::{ProgressBar, ProgressStyle};
+use log::debug;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
 use regex::Regex;
 use std::collections::HashMap;
 use std::time::Duration;
 use tempfile::TempDir;
+use termimad::{self, MadSkin};
 
 const ISSUE_TEMPLATE: &str = r#"
 **Source**: {source_link}
@@ -168,11 +168,14 @@ title: <Issue Title in exactly one line>\n\
 description: <Issue Description that can take multiple lines>",
         formatted_conv
     );
+    debug!("feeding prompt to LLM:\n{prompt}");
 
     let req = GenerationRequest::new(ollama_model, prompt);
     let response = ollama.generate(req).await?;
 
     let content = response.response;
+    debug!("received response:\n{content}");
+
     let content = Regex::new(r"(?ms)<think>.*?</think>\n?")?
         .replace_all(&content, "")
         .trim()
