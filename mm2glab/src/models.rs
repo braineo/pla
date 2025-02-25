@@ -7,6 +7,7 @@ pub struct Conversation {
     pub username: String,
     pub timestamp: DateTime<Local>,
     pub message: String,
+    pub file_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
