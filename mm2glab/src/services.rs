@@ -22,13 +22,6 @@ const ISSUE_TEMPLATE: &str = r#"
 {description}
 
 {reason}
-
-<details>
-<summary>Conversation Thread</summary>
-
-{conversation}
-
-</details>
 "#;
 
 pub async fn run(args: Args) -> Result<()> {
@@ -56,12 +49,7 @@ pub async fn run(args: Args) -> Result<()> {
 
     let title = args.title.unwrap_or(ai_title);
 
-    let description = format_issue_description(
-        &args.permalink,
-        &ai_description,
-        &ai_reason,
-        &format_conversation(&conversation),
-    );
+    let description = format_issue_description(&args.permalink, &ai_description, &ai_reason);
 
     let (final_title, final_description) = if !args.no_preview {
         preview_and_confirm(&title, &description)?
@@ -69,11 +57,12 @@ pub async fn run(args: Args) -> Result<()> {
         (title, description)
     };
 
-    let attachments = process_attachments(&thread, &post_id, &mm_client, &gitlab_client).await?;
+    let conversation_markdown =
+        format_conversation_and_attachments(&conversation, &mm_client, &gitlab_client).await?;
 
     let issue = GitLabIssue {
         title: final_title.clone(),
-        description: format!("{final_description}\n\n{attachments}"),
+        description: format!("{final_description}\n\n{conversation_markdown}"),
     };
 
     let issue_url = gitlab_client.create_issue(&issue).await?;
@@ -142,6 +131,7 @@ async fn get_conversation_from_thread(
                         .single()
                         .ok_or_else(|| anyhow::anyhow!("Invalid timestamp"))?,
                     message: post.message.clone(),
+                    file_ids: post.file_ids.clone(),
                 });
             }
         }
@@ -211,69 +201,60 @@ description: <Issue Description that can take multiple lines>",
     Ok((title, description, reason))
 }
 
-async fn process_attachments(
-    thread: &MattermostThread,
-    target_post_id: &str,
+async fn format_conversation_and_attachments(
+    conversations: &[Conversation],
     mm_client: &impl MattermostApi,
     gitlab_client: &impl GitLabApi,
 ) -> Result<String> {
     let temp_dir = TempDir::new()?;
-    let mut media_links = Vec::new();
-    let mut file_links = Vec::new();
-
-    let target_timestamp = thread
-        .posts
-        .get(target_post_id)
-        .map(|p| p.create_at)
-        .unwrap_or(0);
+    let mut markdown_lines = Vec::new();
 
     let progress = ProgressBar::new(
-        thread
-            .posts
-            .values()
-            .filter(|p| p.create_at >= target_timestamp && p.file_ids.is_some())
+        conversations
+            .iter()
+            .filter(|c| c.file_ids.is_some())
             .map(|p| p.file_ids.as_ref().unwrap().len())
             .sum::<usize>() as u64,
     );
 
-    for post in thread.posts.values() {
-        if post.create_at >= target_timestamp {
-            if let Some(file_ids) = &post.file_ids {
-                for file_id in file_ids {
-                    match mm_client.download_file(file_id).await {
-                        Ok((filename, content, content_type)) => {
-                            let file_path = temp_dir.path().join(&filename);
-                            tokio::fs::write(&file_path, &content).await?;
+    for post in conversations.iter() {
+        markdown_lines.push(format_conversation(post));
 
-                            match gitlab_client.upload_file(&file_path).await {
-                                Ok(upload) => {
-                                    if content_type.starts_with("image/")
-                                        || content_type.starts_with("video/")
-                                    {
-                                        media_links
-                                            .push(format!("{}{{width=60%}}", upload.markdown));
-                                    } else {
-                                        file_links
-                                            .push(format!("- [{}]({})", filename, upload.url));
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!(
-                                        "Failed to upload file {}: {}, use mattermost link instead",
-                                        file_id, e
-                                    );
-                                    file_links.push(format!(
-                                        "- [{}]({})",
-                                        filename,
-                                        mm_client.get_file_url(file_id)
-                                    ));
+        if let Some(file_ids) = &post.file_ids {
+            for file_id in file_ids {
+                match mm_client.download_file(file_id).await {
+                    Ok((filename, content, content_type)) => {
+                        let file_path = temp_dir.path().join(&filename);
+                        tokio::fs::write(&file_path, &content).await?;
+
+                        match gitlab_client.upload_file(&file_path).await {
+                            Ok(upload) => {
+                                if content_type.starts_with("image/")
+                                    || content_type.starts_with("video/")
+                                {
+                                    markdown_lines
+                                        .push(format!("{}{{width=60%}}\n", upload.markdown));
+                                } else {
+                                    markdown_lines
+                                        .push(format!("- [{}]({})\n", filename, upload.url));
                                 }
                             }
-
-                            progress.inc(1);
+                            Err(e) => {
+                                eprintln!(
+                                    "Failed to upload file {}: {}, use mattermost link instead",
+                                    file_id, e
+                                );
+                                markdown_lines.push(format!(
+                                    "- [{}]({})\n",
+                                    filename,
+                                    mm_client.get_file_url(file_id)
+                                ));
+                            }
                         }
-                        Err(e) => eprintln!("Failed to download file {}: {}", file_id, e),
+
+                        progress.inc(1);
                     }
+                    Err(e) => eprintln!("Failed to download file {}: {}", file_id, e),
                 }
             }
         }
@@ -281,38 +262,25 @@ async fn process_attachments(
 
     progress.finish_and_clear();
 
-    let mut sections = Vec::new();
-    if !media_links.is_empty() {
-        sections.push(format!("## Media\n\n{}", media_links.join("\n\n")));
-    }
-    if !file_links.is_empty() {
-        sections.push(format!("## Attachments\n\n{}", file_links.join("\n")));
-    }
-
-    Ok(sections.join("\n\n"))
+    Ok(format!(
+        "<details>\n\
+<summary>Conversation Thread</summary>\n\n\
+{}\n\
+</details>",
+        markdown_lines.join("\n\n")
+    ))
 }
 
-fn format_conversation(conversations: &[Conversation]) -> String {
-    conversations
-        .iter()
-        .map(|c| {
-            format!(
-                "**{}** ({}): {}",
-                c.username,
-                c.timestamp.format("%Y-%m-%d %H:%M:%S"),
-                c.message
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+fn format_conversation(conversation: &Conversation) -> String {
+    format!(
+        "**{}** ({}): {}",
+        conversation.username,
+        conversation.timestamp.format("%Y-%m-%d %H:%M:%S"),
+        conversation.message
+    )
 }
 
-fn format_issue_description(
-    source_link: &str,
-    ai_description: &str,
-    ai_reason: &str,
-    conversation: &str,
-) -> String {
+fn format_issue_description(source_link: &str, ai_description: &str, ai_reason: &str) -> String {
     ISSUE_TEMPLATE
         .replace("{source_link}", source_link)
         .replace(
@@ -328,7 +296,6 @@ fn format_issue_description(
 </details>",
             ),
         )
-        .replace("{conversation}", conversation)
 }
 
 fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String)> {
