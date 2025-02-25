@@ -16,6 +16,8 @@ pub trait MattermostApi {
     ) -> Result<()>;
     async fn download_file(&self, file_id: &str) -> Result<(String, Vec<u8>, String)>;
     async fn get_post(&self, post_id: &str) -> Result<MattermostPost>;
+
+    fn get_file_url(&self, file_id: &str) -> String;
 }
 
 pub struct MattermostClient {
@@ -89,7 +91,7 @@ impl MattermostApi for MattermostClient {
     }
 
     async fn download_file(&self, file_id: &str) -> Result<(String, Vec<u8>, String)> {
-        let url = format!("{}/api/v4/files/{}", self.base_url, file_id);
+        let url = self.get_file_url(file_id);
         let response = self.client.get(&url).send().await?;
 
         let content_disposition = response
@@ -121,5 +123,9 @@ impl MattermostApi for MattermostClient {
         let url = format!("{}/api/v4/posts/{}", self.base_url, post_id);
         let response = self.client.get(&url).send().await?.json().await?;
         Ok(response)
+    }
+
+    fn get_file_url(&self, file_id: &str) -> String {
+        format!("{}/api/v4/files/{}", self.base_url, file_id)
     }
 }

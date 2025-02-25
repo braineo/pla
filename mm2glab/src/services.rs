@@ -239,14 +239,29 @@ async fn process_attachments(
                             let file_path = temp_dir.path().join(&filename);
                             tokio::fs::write(&file_path, &content).await?;
 
-                            let upload = gitlab_client.upload_file(&file_path).await?;
-
-                            if content_type.starts_with("image/")
-                                || content_type.starts_with("video/")
-                            {
-                                media_links.push(format!("{}{{width=60%}}", upload.markdown));
-                            } else {
-                                file_links.push(format!("- [{}]({})", filename, upload.url));
+                            match gitlab_client.upload_file(&file_path).await {
+                                Ok(upload) => {
+                                    if content_type.starts_with("image/")
+                                        || content_type.starts_with("video/")
+                                    {
+                                        media_links
+                                            .push(format!("{}{{width=60%}}", upload.markdown));
+                                    } else {
+                                        file_links
+                                            .push(format!("- [{}]({})", filename, upload.url));
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "Failed to upload file {}: {}, use mattermost link instead",
+                                        file_id, e
+                                    );
+                                    file_links.push(format!(
+                                        "- [{}]({})",
+                                        filename,
+                                        mm_client.get_file_url(file_id)
+                                    ));
+                                }
                             }
 
                             progress.inc(1);
