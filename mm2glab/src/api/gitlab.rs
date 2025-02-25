@@ -1,8 +1,10 @@
-use crate::models::*;
 use anyhow::Result;
 use async_trait::async_trait;
+use log::debug;
 use reqwest::{header, multipart, Client};
 use std::{path::Path, time::Duration};
+
+use crate::models::{GitLabIssue, GitLabUploadResponse};
 
 #[async_trait]
 pub trait GitLabApi {
@@ -66,22 +68,34 @@ impl GitLabApi for GitLabClient {
             self.base_url, self.project_id
         );
 
-        let file_name = path.file_name().unwrap().to_string_lossy();
+        let file_name = path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Invalid file path"))?
+            .to_string_lossy();
+
         let file_part = multipart::Part::file(path)
             .await?
             .file_name(file_name.to_string());
 
         let form = multipart::Form::new().part("file", file_part);
 
-        let response: GitLabUploadResponse = self
-            .client
-            .post(&url)
-            .multipart(form)
-            .send()
-            .await?
-            .json()
-            .await?;
+        let response = self.client.post(&url).multipart(form).send().await?;
 
-        Ok(response)
+        // Check the status code before trying to parse JSON
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!(
+                "GitLab upload failed with status {}: {}",
+                status,
+                error_text
+            ));
+        }
+
+        // Only try to parse as JSON if we got a success status
+        let gitlab_response: GitLabUploadResponse = response.json().await?;
+
+        Ok(gitlab_response)
     }
 }
