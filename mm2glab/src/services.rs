@@ -72,7 +72,7 @@ pub async fn run(args: Args) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
-            .template("{spinner} {msg}")
+            .template("{spinner} {msg} -- {elapsed}")
             .unwrap(),
     );
     spinner.set_message("Generating title and description from LLM...");
