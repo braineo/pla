@@ -96,19 +96,19 @@ pub async fn run(args: Args) -> Result<()> {
     let conversation_markdown =
         format_conversation_and_attachments(&conversation, &mm_client, &gitlab_client).await?;
 
-    let issue = GitLabIssue {
-        title: final_title.clone(),
-        description: format!("{final_description}\n\n{conversation_markdown}"),
-    };
+    let issue = GitLabIssueChangeset::new_issue(
+        final_title.clone(),
+        format!("{final_description}\n\n{conversation_markdown}"),
+    );
 
-    let issue_url = gitlab_client.create_issue(&issue).await?;
-    println!("Successfully created issue: {}", issue_url);
+    let issue = gitlab_client.create_issue(&issue).await?;
+    println!("Successfully created issue: {}", issue.web_url);
 
     if !args.no_reply {
         let post = mm_client.get_post(&post_id).await?;
         let reply = format!(
             ":gitlab: This conversation is now tracked in GitLab Issue: [{}]({})",
-            final_title, issue_url
+            final_title, issue.web_url
         );
         mm_client
             .create_post(&post.channel_id, &reply, Some(&post_id))
