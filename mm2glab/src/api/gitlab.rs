@@ -17,6 +17,7 @@ pub trait GitLabApi {
     async fn search_project_members(&self, search_term: &str) -> Result<Vec<GitLabUser>>;
 }
 
+#[derive(Clone)]
 pub struct GitLabClient {
     client: Client,
     base_url: String,
@@ -107,14 +108,14 @@ impl GitLabApi for GitLabClient {
 
     async fn search_project_members(&self, search_term: &str) -> Result<Vec<GitLabUser>> {
         let url = format!(
-            "{}/api/v4/projects/{}/members",
+            "{}/api/v4/projects/{}/members/all",
             self.base_url, self.project_id
         );
 
         let response = self
             .client
             .get(&url)
-            .query(&[("search", search_term), ("active", "true")])
+            .query(&[("query", search_term)])
             .send()
             .await?;
 
@@ -131,7 +132,10 @@ impl GitLabApi for GitLabClient {
 
         let members: Vec<GitLabUser> = response.json().await?;
 
-        Ok(members)
+        Ok(members
+            .into_iter()
+            .filter(|m| m.state == "active")
+            .collect())
     }
 
     async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse> {
