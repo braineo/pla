@@ -3,12 +3,18 @@ use async_trait::async_trait;
 use reqwest::{header, multipart, Client};
 use std::{path::Path, time::Duration};
 
-use crate::models::{GitLabIssue, GitLabUploadResponse};
+use crate::models::{GitLabIssue, GitLabIssueChangeset, GitLabUploadResponse, GitLabUser};
 
 #[async_trait]
 pub trait GitLabApi {
-    async fn create_issue(&self, issue: &GitLabIssue) -> Result<String>;
+    async fn create_issue(&self, issue: &GitLabIssueChangeset) -> Result<GitLabIssue>;
+    async fn update_issue(
+        &self,
+        issue_id: u64,
+        changeset: &GitLabIssueChangeset,
+    ) -> Result<GitLabIssue>;
     async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse>;
+    async fn search_project_members(&self, search_term: &str) -> Result<Vec<GitLabUser>>;
 }
 
 pub struct GitLabClient {
@@ -43,22 +49,89 @@ impl GitLabClient {
 
 #[async_trait]
 impl GitLabApi for GitLabClient {
-    async fn create_issue(&self, issue: &GitLabIssue) -> Result<String> {
+    async fn create_issue(&self, issue: &GitLabIssueChangeset) -> Result<GitLabIssue> {
+        if issue.title.is_none() || issue.description.is_none() {
+            return Err(anyhow::anyhow!(
+                "Title and description are required for new issues"
+            ));
+        }
+
         let url = format!(
             "{}/api/v4/projects/{}/issues",
             self.base_url, self.project_id
         );
 
-        let response: serde_json::Value = self
+        let response = self.client.post(&url).json(&issue).send().await?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!(
+                "cannot create issue with status {}: {}",
+                status,
+                error_text
+            ));
+        };
+
+        let issue: GitLabIssue = response.json().await?;
+
+        Ok(issue)
+    }
+
+    async fn update_issue(
+        &self,
+        issue_id: u64,
+        changeset: &GitLabIssueChangeset,
+    ) -> Result<GitLabIssue> {
+        let url = format!(
+            "{}/api/v4/projects/{}/issues/{}",
+            self.base_url, self.project_id, issue_id
+        );
+
+        let response = self.client.put(&url).json(&changeset).send().await?;
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!(
+                "Failed to update issue: {} - {}",
+                status,
+                error_text
+            ));
+        }
+
+        let issue: GitLabIssue = response.json().await?;
+
+        Ok(issue)
+    }
+
+    async fn search_project_members(&self, search_term: &str) -> Result<Vec<GitLabUser>> {
+        let url = format!(
+            "{}/api/v4/projects/{}/members",
+            self.base_url, self.project_id
+        );
+
+        let response = self
             .client
-            .post(&url)
-            .json(&issue)
+            .get(&url)
+            .query(&[("search", search_term), ("active", "true")])
             .send()
-            .await?
-            .json()
             .await?;
 
-        Ok(response["web_url"].as_str().unwrap_or_default().to_string())
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!(
+                "cannot search user with status {}: {}",
+                status,
+                error_text
+            ));
+        };
+
+        let members: Vec<GitLabUser> = response.json().await?;
+
+        Ok(members)
     }
 
     async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse> {
