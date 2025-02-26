@@ -2,9 +2,15 @@ use crate::api::gitlab::{GitLabApi, GitLabClient};
 use crate::api::mattermost::{MattermostApi, MattermostClient};
 use crate::settings::merge_settings_with_args;
 use crate::{cli::Args, models::*};
-
 use anyhow::Result;
 use chrono::{Local, TimeZone};
+use crossterm::{
+    cursor,
+    event::{self, Event, KeyCode, KeyEvent},
+    execute,
+    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
+    terminal::{self, Clear, ClearType},
+};
 use dialoguer::Editor;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::debug;
@@ -12,10 +18,12 @@ use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
 use regex::Regex;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::io::{stdout, Write};
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use tera::{Context, Tera};
 use termimad::{self, MadSkin};
+use tokio::sync::mpsc;
 
 #[derive(serde::Serialize)]
 struct IssueTemplateContext {
@@ -68,6 +76,21 @@ pub async fn run(args: Args) -> Result<()> {
     let thread = mm_client.get_thread(&post_id).await?;
 
     let conversation = get_conversation_from_thread(&thread, &post_id, &mm_client).await?;
+
+    match realtime_search_user(&gitlab_client).await {
+        Ok(Some(selected_user)) => {
+            debug!("selected_user {:?}", selected_user);
+            // match assign_user_to_issue(&gitlab_client, project_id, issue_id, &selected_user).await {
+            //     Ok(_) => println!(
+            //         "Successfully assigned {} (@{}) to issue #{}",
+            //         selected_user.name, selected_user.username, issue_id
+            //     ),
+            //     Err(e) => eprintln!("Error assigning user: {}", e),
+            // }
+        }
+        Ok(None) => println!("No user selected, skipping assignment"),
+        Err(e) => eprintln!("Error during user search: {}", e),
+    }
 
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
@@ -376,6 +399,219 @@ fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String
             }
             2 => return Err(anyhow::anyhow!("Operation cancelled by user")),
             _ => unreachable!(),
+        }
+    }
+}
+
+// Real-time interactive search with terminal control
+async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<GitLabUser>> {
+    // Save current terminal state
+    terminal::enable_raw_mode()?;
+    let mut stdout = stdout();
+
+    // Set up channels for async search
+    let (search_tx, mut search_rx) = mpsc::channel::<String>(10);
+    let (result_tx, mut result_rx) = mpsc::channel::<Result<Vec<GitLabUser>, String>>(10);
+
+    // Clone client for the search task
+    let client_clone = gitlab_client.clone();
+
+    // Spawn a background task for searching
+    let search_task = tokio::spawn(async move {
+        let mut last_term = String::new();
+        let mut last_search_time = Instant::now();
+
+        while let Some(term) = search_rx.recv().await {
+            // Debounce: only search if term changed and some time has passed
+            let now = Instant::now();
+            if term != last_term
+                && now.duration_since(last_search_time) > Duration::from_millis(150)
+            {
+                last_term = term.clone();
+                last_search_time = now;
+
+                // Don't search if term is empty
+                if term.is_empty() {
+                    result_tx.send(Ok(Vec::new())).await.unwrap_or(());
+                    continue;
+                }
+
+                // Perform actual API search
+                match client_clone.search_project_members(&term).await {
+                    Ok(users) => {
+                        result_tx.send(Ok(users)).await.unwrap_or(());
+                    }
+                    Err(e) => {
+                        result_tx
+                            .send(Err(format!("Error: {}", e)))
+                            .await
+                            .unwrap_or(());
+                    }
+                }
+            }
+        }
+    });
+
+    let mut search_term = String::new();
+    let mut results: Vec<GitLabUser> = Vec::new();
+    let mut selected_idx: usize = 0;
+    let mut error_message = String::new();
+    let mut show_loading = false;
+
+    // Main loop
+    loop {
+        // Clear screen and reset cursor
+        execute!(
+            stdout,
+            Clear(ClearType::All),
+            cursor::MoveTo(0, 0),
+            ResetColor
+        )?;
+
+        // Draw search box
+        execute!(
+            stdout,
+            SetForegroundColor(Color::Blue),
+            Print("Search GitLab users: "),
+            ResetColor,
+            Print(&search_term),
+            Print("█")
+        )?;
+
+        // Check if we have new search results
+        if let Ok(result) = result_rx.try_recv() {
+            show_loading = false;
+            match result {
+                Ok(users) => {
+                    results = users;
+                    eprintln!("get users from search, {:?}", results);
+                    error_message.clear();
+                    // Reset selection when results change
+                    selected_idx = 0;
+                }
+                Err(e) => {
+                    error_message = e;
+                }
+            }
+        }
+
+        // Show loading indicator if appropriate
+        if show_loading {
+            execute!(
+                stdout,
+                cursor::MoveToNextLine(1),
+                SetForegroundColor(Color::Yellow),
+                Print("Searching..."),
+                ResetColor
+            )?;
+        }
+
+        // Show error if any
+        if !error_message.is_empty() {
+            execute!(
+                stdout,
+                cursor::MoveToNextLine(1),
+                SetForegroundColor(Color::Red),
+                Print(&error_message),
+                ResetColor
+            )?;
+        }
+
+        // Show results
+        if !results.is_empty() {
+            execute!(stdout, cursor::MoveToNextLine(1), Print("Results:"))?;
+
+            for (i, user) in results.iter().enumerate() {
+                execute!(stdout, cursor::MoveToNextLine(1))?;
+
+                // Highlight selected item
+                if i == selected_idx {
+                    execute!(
+                        stdout,
+                        SetBackgroundColor(Color::Blue),
+                        SetForegroundColor(Color::White),
+                        Print(format!("  > {} (@{})", user.name, user.username)),
+                        ResetColor
+                    )?;
+                } else {
+                    execute!(
+                        stdout,
+                        Print(format!("    {} (@{})", user.name, user.username)),
+                    )?;
+                }
+            }
+        } else if !search_term.is_empty() && !show_loading {
+            execute!(
+                stdout,
+                cursor::MoveToNextLine(2),
+                Print("No users found matching your search")
+            )?;
+        }
+
+        // Show instructions at the bottom
+        execute!(
+            stdout,
+            cursor::MoveToNextLine(2),
+            SetForegroundColor(Color::DarkGrey),
+            Print("Type to search, Up/Down to navigate, Enter to select, Esc to cancel"),
+            ResetColor
+        )?;
+
+        stdout.flush()?;
+
+        // Handle keyboard input
+        if let Event::Key(KeyEvent {
+            code, modifiers: _, ..
+        }) = event::read()?
+        {
+            match code {
+                KeyCode::Char(c) => {
+                    search_term.push(c);
+                    search_tx.send(search_term.clone()).await?;
+                    show_loading = true;
+                }
+                KeyCode::Backspace => {
+                    if !search_term.is_empty() {
+                        search_term.pop();
+                        search_tx.send(search_term.clone()).await?;
+                        show_loading = true;
+                    }
+                }
+                KeyCode::Delete => {
+                    search_term.clear();
+                    results.clear();
+                }
+                KeyCode::Up => {
+                    if !results.is_empty() {
+                        selected_idx = if selected_idx > 0 {
+                            selected_idx - 1
+                        } else {
+                            results.len() - 1
+                        };
+                    }
+                }
+                KeyCode::Down => {
+                    if !results.is_empty() {
+                        selected_idx = (selected_idx + 1) % results.len();
+                    }
+                }
+                KeyCode::Enter => {
+                    // Select the current user if any
+                    if !results.is_empty() {
+                        let selected_user = results[selected_idx].clone();
+                        terminal::disable_raw_mode()?;
+                        search_task.abort();
+                        return Ok(Some(selected_user));
+                    }
+                }
+                KeyCode::Esc => {
+                    // Cancel
+                    terminal::disable_raw_mode()?;
+                    search_task.abort();
+                    return Ok(None);
+                }
+                _ => {}
+            }
         }
     }
 }
