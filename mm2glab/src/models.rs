@@ -73,10 +73,11 @@ impl GitLabIssueChangeset {
 
     // Create a changeset with required fields for new issues
     pub fn new_issue(title: String, description: String) -> Self {
-        let mut changeset = Self::default();
-        changeset.title = Some(title);
-        changeset.description = Some(description);
-        changeset
+        Self {
+            title: Some(title),
+            description: Some(description),
+            ..Self::default()
+        }
     }
 
     // Convenience methods to add fields
@@ -134,12 +135,13 @@ pub struct GitLabUploadResponse {
     pub markdown: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct GitLabUser {
     pub id: u64,
     pub username: String,
     pub name: String,
     pub locked: bool,
+    pub state: String,
     pub avatar_url: String,
     pub web_url: String,
 }
