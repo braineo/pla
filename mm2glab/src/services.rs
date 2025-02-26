@@ -410,43 +410,31 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
     let mut stdout = stdout();
 
     // Set up channels for async search
-    let (search_tx, mut search_rx) = mpsc::channel::<String>(10);
-    let (result_tx, mut result_rx) = mpsc::channel::<Result<Vec<GitLabUser>, String>>(10);
+    let (search_tx, mut search_rx) = mpsc::channel::<(u64, String)>(10);
+    let (result_tx, mut result_rx) = mpsc::channel::<(u64, Result<Vec<GitLabUser>, String>)>(10);
 
     // Clone client for the search task
     let client_clone = gitlab_client.clone();
 
-    // Spawn a background task for searching
+    // Spawn a background task for searching - simple, just do the search
     let search_task = tokio::spawn(async move {
-        let mut last_term = String::new();
-        let mut last_search_time = Instant::now();
+        while let Some((seq, term)) = search_rx.recv().await {
+            // Don't search if term is empty
+            if term.is_empty() {
+                result_tx.send((seq, Ok(Vec::new()))).await.unwrap_or(());
+                continue;
+            }
 
-        while let Some(term) = search_rx.recv().await {
-            // Debounce: only search if term changed and some time has passed
-            let now = Instant::now();
-            if term != last_term
-                && now.duration_since(last_search_time) > Duration::from_millis(150)
-            {
-                last_term = term.clone();
-                last_search_time = now;
-
-                // Don't search if term is empty
-                if term.is_empty() {
-                    result_tx.send(Ok(Vec::new())).await.unwrap_or(());
-                    continue;
+            // Perform actual API search
+            match client_clone.search_project_members(&term).await {
+                Ok(users) => {
+                    result_tx.send((seq, Ok(users))).await.unwrap_or(());
                 }
-
-                // Perform actual API search
-                match client_clone.search_project_members(&term).await {
-                    Ok(users) => {
-                        result_tx.send(Ok(users)).await.unwrap_or(());
-                    }
-                    Err(e) => {
-                        result_tx
-                            .send(Err(format!("Error: {}", e)))
-                            .await
-                            .unwrap_or(());
-                    }
+                Err(e) => {
+                    result_tx
+                        .send((seq, Err(format!("Error: {}", e))))
+                        .await
+                        .unwrap_or(());
                 }
             }
         }
@@ -457,6 +445,13 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
     let mut selected_idx: usize = 0;
     let mut error_message = String::new();
     let mut show_loading = false;
+    let mut latest_seq_received: u64 = 0;
+    let mut current_seq: u64 = 0;
+
+    // For debouncing
+    let mut last_keystroke_time = Instant::now();
+    let mut pending_search = false;
+    let mut debounce_interval = Duration::from_millis(300);
 
     // Main loop
     loop {
@@ -478,25 +473,46 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
             Print("█")
         )?;
 
-        // Check if we have new search results
-        if let Ok(result) = result_rx.try_recv() {
-            show_loading = false;
-            match result {
-                Ok(users) => {
-                    results = users;
-                    eprintln!("get users from search, {:?}", results);
-                    error_message.clear();
-                    // Reset selection when results change
-                    selected_idx = 0;
-                }
-                Err(e) => {
-                    error_message = e;
+        // Check for debounced search - if we have a pending search and debounce time elapsed
+        if pending_search && last_keystroke_time.elapsed() >= debounce_interval {
+            pending_search = false;
+            if !search_term.is_empty() {
+                search_tx.send((current_seq, search_term.clone())).await?;
+                show_loading = true;
+            }
+        }
+
+        // Check for search results - process all available results
+        let mut got_results = false;
+        while let Ok((seq, result)) = result_rx.try_recv() {
+            got_results = true;
+
+            // Only process newer or current results, ignore older ones
+            if seq >= latest_seq_received {
+                latest_seq_received = seq;
+                show_loading = false;
+
+                match result {
+                    Ok(users) => {
+                        results = users;
+                        error_message.clear();
+
+                        // Adjust selection index if needed
+                        if !results.is_empty() {
+                            selected_idx = selected_idx.min(results.len() - 1);
+                        } else {
+                            selected_idx = 0;
+                        }
+                    }
+                    Err(e) => {
+                        error_message = e;
+                    }
                 }
             }
         }
 
         // Show loading indicator if appropriate
-        if show_loading {
+        if show_loading && !got_results {
             execute!(
                 stdout,
                 cursor::MoveToNextLine(1),
@@ -559,58 +575,67 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
 
         stdout.flush()?;
 
-        // Handle keyboard input
-        if let Event::Key(KeyEvent {
-            code, modifiers: _, ..
-        }) = event::read()?
-        {
-            match code {
-                KeyCode::Char(c) => {
-                    search_term.push(c);
-                    search_tx.send(search_term.clone()).await?;
-                    show_loading = true;
-                }
-                KeyCode::Backspace => {
-                    if !search_term.is_empty() {
-                        search_term.pop();
-                        search_tx.send(search_term.clone()).await?;
-                        show_loading = true;
+        // Set a short timeout for event reading to allow debouncing to work
+        if event::poll(Duration::from_millis(50))? {
+            // Handle keyboard input
+            if let Event::Key(KeyEvent {
+                code, modifiers: _, ..
+            }) = event::read()?
+            {
+                match code {
+                    KeyCode::Char(c) => {
+                        search_term.push(c);
+                        current_seq += 1;
+                        pending_search = true;
+                        last_keystroke_time = Instant::now();
                     }
-                }
-                KeyCode::Delete => {
-                    search_term.clear();
-                    results.clear();
-                }
-                KeyCode::Up => {
-                    if !results.is_empty() {
-                        selected_idx = if selected_idx > 0 {
-                            selected_idx - 1
-                        } else {
-                            results.len() - 1
-                        };
+                    KeyCode::Backspace => {
+                        if !search_term.is_empty() {
+                            search_term.pop();
+                            current_seq += 1;
+                            pending_search = true;
+                            last_keystroke_time = Instant::now();
+                        }
                     }
-                }
-                KeyCode::Down => {
-                    if !results.is_empty() {
-                        selected_idx = (selected_idx + 1) % results.len();
+                    KeyCode::Delete => {
+                        search_term.clear();
+                        current_seq += 1;
+                        // For delete, send immediately without debouncing
+                        search_tx.send((current_seq, search_term.clone())).await?;
+                        results.clear();
+                        pending_search = false; // Already sent
                     }
-                }
-                KeyCode::Enter => {
-                    // Select the current user if any
-                    if !results.is_empty() {
-                        let selected_user = results[selected_idx].clone();
+                    KeyCode::Up => {
+                        if !results.is_empty() {
+                            selected_idx = if selected_idx > 0 {
+                                selected_idx - 1
+                            } else {
+                                results.len() - 1
+                            };
+                        }
+                    }
+                    KeyCode::Down => {
+                        if !results.is_empty() {
+                            selected_idx = (selected_idx + 1) % results.len();
+                        }
+                    }
+                    KeyCode::Enter => {
+                        // Select the current user if any
+                        if !results.is_empty() {
+                            let selected_user = results[selected_idx].clone();
+                            terminal::disable_raw_mode()?;
+                            search_task.abort();
+                            return Ok(Some(selected_user));
+                        }
+                    }
+                    KeyCode::Esc => {
+                        // Cancel
                         terminal::disable_raw_mode()?;
                         search_task.abort();
-                        return Ok(Some(selected_user));
+                        return Ok(None);
                     }
+                    _ => {}
                 }
-                KeyCode::Esc => {
-                    // Cancel
-                    terminal::disable_raw_mode()?;
-                    search_task.abort();
-                    return Ok(None);
-                }
-                _ => {}
             }
         }
     }
