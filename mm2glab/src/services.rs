@@ -451,26 +451,18 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
     // For debouncing
     let mut last_keystroke_time = Instant::now();
     let mut pending_search = false;
-    let mut debounce_interval = Duration::from_millis(300);
+    let debounce_interval = Duration::from_millis(300);
 
     // Main loop
     loop {
-        // Clear screen and reset cursor
-        execute!(
-            stdout,
-            Clear(ClearType::All),
-            cursor::MoveTo(0, 0),
-            ResetColor
-        )?;
-
-        // Draw search box
-        execute!(
-            stdout,
-            SetForegroundColor(Color::Blue),
-            Print("Search GitLab users: "),
-            ResetColor,
-            Print(&search_term),
-            Print("█")
+        // Draw the UI
+        draw_user_autocompletion(
+            &mut stdout,
+            &search_term,
+            &results,
+            selected_idx,
+            &error_message,
+            show_loading,
         )?;
 
         // Check for debounced search - if we have a pending search and debounce time elapsed
@@ -511,75 +503,11 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
             }
         }
 
-        // Show loading indicator if appropriate
-        if show_loading && !got_results {
-            execute!(
-                stdout,
-                cursor::MoveToNextLine(1),
-                SetForegroundColor(Color::Yellow),
-                Print("Searching..."),
-                ResetColor
-            )?;
-        }
-
-        // Show error if any
-        if !error_message.is_empty() {
-            execute!(
-                stdout,
-                cursor::MoveToNextLine(1),
-                SetForegroundColor(Color::Red),
-                Print(&error_message),
-                ResetColor
-            )?;
-        }
-
-        // Show results
-        if !results.is_empty() {
-            execute!(stdout, cursor::MoveToNextLine(1), Print("Results:"))?;
-
-            for (i, user) in results.iter().enumerate() {
-                execute!(stdout, cursor::MoveToNextLine(1))?;
-
-                // Highlight selected item
-                if i == selected_idx {
-                    execute!(
-                        stdout,
-                        SetBackgroundColor(Color::Blue),
-                        SetForegroundColor(Color::White),
-                        Print(format!("  > {} (@{})", user.name, user.username)),
-                        ResetColor
-                    )?;
-                } else {
-                    execute!(
-                        stdout,
-                        Print(format!("    {} (@{})", user.name, user.username)),
-                    )?;
-                }
-            }
-        } else if !search_term.is_empty() && !show_loading {
-            execute!(
-                stdout,
-                cursor::MoveToNextLine(2),
-                Print("No users found matching your search")
-            )?;
-        }
-
-        // Show instructions at the bottom
-        execute!(
-            stdout,
-            cursor::MoveToNextLine(2),
-            SetForegroundColor(Color::DarkGrey),
-            Print("Type to search, Up/Down to navigate, Enter to select, Esc to cancel"),
-            ResetColor
-        )?;
-
-        stdout.flush()?;
-
         // Set a short timeout for event reading to allow debouncing to work
         if event::poll(Duration::from_millis(50))? {
             // Handle keyboard input
             if let Event::Key(KeyEvent {
-                code, modifiers: _, ..
+                code, modifiers, ..
             }) = event::read()?
             {
                 match code {
@@ -605,7 +533,7 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
                         results.clear();
                         pending_search = false; // Already sent
                     }
-                    KeyCode::Up => {
+                    KeyCode::Up | KeyCode::Char('p') if modifiers.contains(event::KeyModifiers::CONTROL) => {
                         if !results.is_empty() {
                             selected_idx = if selected_idx > 0 {
                                 selected_idx - 1
@@ -614,7 +542,7 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
                             };
                         }
                     }
-                    KeyCode::Down => {
+                    KeyCode::Down | KeyCode::Char('n') if modifiers.contains(event::KeyModifiers::CONTROL) => {
                         if !results.is_empty() {
                             selected_idx = (selected_idx + 1) % results.len();
                         }
@@ -628,7 +556,7 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
                             return Ok(Some(selected_user));
                         }
                     }
-                    KeyCode::Esc => {
+                    KeyCode::Esc | KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
                         // Cancel
                         terminal::disable_raw_mode()?;
                         search_task.abort();
@@ -639,4 +567,101 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
             }
         }
     }
+}
+
+fn draw_user_autocompletion(
+    stdout: &mut std::io::Stdout,
+    search_term: &str,
+    results: &[GitLabUser],
+    selected_idx: usize,
+    error_message: &str,
+    show_loading: bool,
+) -> Result<()> {
+    // Save the current cursor position
+    let (cursor_x, cursor_y) = crossterm::cursor::position()?;
+
+    // Clear the lines below the current cursor position
+    execute!(
+        stdout,
+        cursor::MoveTo(cursor_x, cursor_y),
+        Clear(ClearType::FromCursorDown)
+    )?;
+
+    // Draw search box
+    execute!(
+        stdout,
+        SetForegroundColor(Color::Blue),
+        Print("Search GitLab users: "),
+        ResetColor,
+        Print(search_term),
+        Print("█")
+    )?;
+
+    // Show loading indicator if appropriate
+    if show_loading {
+        execute!(
+            stdout,
+            cursor::MoveToNextLine(1),
+            SetForegroundColor(Color::Yellow),
+            Print("Searching..."),
+            ResetColor
+        )?;
+    }
+
+    // Show error if any
+    if !error_message.is_empty() {
+        execute!(
+            stdout,
+            cursor::MoveToNextLine(1),
+            SetForegroundColor(Color::Red),
+            Print(error_message),
+            ResetColor
+        )?;
+    }
+
+    // Show results
+    if !results.is_empty() {
+        execute!(stdout, cursor::MoveToNextLine(1), Print("Results:"))?;
+
+        for (i, user) in results.iter().enumerate() {
+            execute!(stdout, cursor::MoveToNextLine(1))?;
+
+            // Highlight selected item
+            if i == selected_idx {
+                execute!(
+                    stdout,
+                    SetBackgroundColor(Color::Blue),
+                    SetForegroundColor(Color::White),
+                    Print(format!("  > {} (@{})", user.name, user.username)),
+                    ResetColor
+                )?;
+            } else {
+                execute!(
+                    stdout,
+                    Print(format!("    {} (@{})", user.name, user.username)),
+                )?;
+            }
+        }
+    } else if !search_term.is_empty() && !show_loading {
+        execute!(
+            stdout,
+            cursor::MoveToNextLine(2),
+            Print("No users found matching your search")
+        )?;
+    }
+
+    // Show instructions at the bottom
+    execute!(
+        stdout,
+        cursor::MoveToNextLine(2),
+        SetForegroundColor(Color::DarkGrey),
+        Print("Type to search, Up/Down to navigate, Ctrl+N/P to navigate, Enter to select, Ctrl+C to cancel"),
+        ResetColor
+    )?;
+
+    // Restore the cursor position
+    execute!(stdout, cursor::MoveTo(cursor_x, cursor_y))?;
+
+    stdout.flush()?;
+    Ok(())
 }
