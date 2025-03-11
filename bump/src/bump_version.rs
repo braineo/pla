@@ -33,6 +33,8 @@ pub enum BumpType {
     PrePatch,
     /// Increase prerelease version.
     Prerelease,
+    /// Remove prelease suffix from version.
+    Release,
 }
 
 impl BumpVersion for Version {

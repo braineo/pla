@@ -236,6 +236,7 @@ fn main() -> anyhow::Result<()> {
                 .increment_patch()
                 .append_prerelease_identifiers(&prerelease_identifier),
             BumpType::Prerelease => version.increment_prerelease(),
+            BumpType::Release => version.convert_prerelease_to_release(),
         }
     } else {
         version.clone()
