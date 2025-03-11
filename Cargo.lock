@@ -1620,6 +1620,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "clap",
+ "config 0.15.11",
  "crossterm 0.28.1",
  "dialoguer",
  "edit",

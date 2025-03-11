@@ -533,7 +533,9 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
                         results.clear();
                         pending_search = false; // Already sent
                     }
-                    KeyCode::Up | KeyCode::Char('p') if modifiers.contains(event::KeyModifiers::CONTROL) => {
+                    KeyCode::Up | KeyCode::Char('p')
+                        if modifiers.contains(event::KeyModifiers::CONTROL) =>
+                    {
                         if !results.is_empty() {
                             selected_idx = if selected_idx > 0 {
                                 selected_idx - 1
@@ -542,7 +544,9 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
                             };
                         }
                     }
-                    KeyCode::Down | KeyCode::Char('n') if modifiers.contains(event::KeyModifiers::CONTROL) => {
+                    KeyCode::Down | KeyCode::Char('n')
+                        if modifiers.contains(event::KeyModifiers::CONTROL) =>
+                    {
                         if !results.is_empty() {
                             selected_idx = (selected_idx + 1) % results.len();
                         }
@@ -556,7 +560,9 @@ async fn realtime_search_user(gitlab_client: &GitLabClient) -> Result<Option<Git
                             return Ok(Some(selected_user));
                         }
                     }
-                    KeyCode::Esc | KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
+                    KeyCode::Esc | KeyCode::Char('c')
+                        if modifiers.contains(event::KeyModifiers::CONTROL) =>
+                    {
                         // Cancel
                         terminal::disable_raw_mode()?;
                         search_task.abort();
