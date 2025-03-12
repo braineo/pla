@@ -66,7 +66,7 @@ impl Repo {
             *version = json!(next_version);
         }
 
-        if file_name.to_string_lossy() == "pacakge-lock.json" {
+        if file_name.to_string_lossy() == "package-lock.json" {
             if let Some(version) = json_value.pointer_mut("/packages//version") {
                 *version = json!(next_version)
             }
