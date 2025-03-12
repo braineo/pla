@@ -97,14 +97,14 @@ enum VersionFileFormat {
     Toml,
 }
 
-fn detect_file_format(file_path: &Path) -> VersionFileFormat {
-    if file_path.ends_with(".json") {
-        VersionFileFormat::Json
-    } else if file_path.ends_with(".toml") {
-        VersionFileFormat::Toml
-    } else {
-        // Default to JSON if we can't determine from extension
-        VersionFileFormat::Json
+fn detect_file_format(file_path: &Path) -> Result<VersionFileFormat> {
+    match file_path.extension().and_then(|ext| ext.to_str()) {
+        Some("json") => Ok(VersionFileFormat::Json),
+        Some("toml") => Ok(VersionFileFormat::Toml),
+        _ => Err(anyhow!(
+            "cannot determine file format {}, supported formats are JSON and TOML",
+            file_path.display()
+        )),
     }
 }
 
@@ -113,7 +113,8 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
         Some(file_name) => file_name,
         _ => return Err(anyhow!("path does not contain file name")),
     };
-    let format = detect_file_format(file_path);
+
+    let format = detect_file_format(file_path)?;
 
     match format {
         VersionFileFormat::Json => {

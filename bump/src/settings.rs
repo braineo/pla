@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct RawSettings {
-    pub version_file: String,
+    pub version_file: Option<String>,
     pub bump_files: Option<Vec<String>>,
     pub tag_prefix: Option<String>,
 }
@@ -27,13 +27,31 @@ pub fn init_settings(project_path: &Path) -> anyhow::Result<Settings> {
 
     let tag_prefix = raw_settings.tag_prefix.unwrap_or_else(|| "v".to_string());
 
+    let version_file = match raw_settings.version_file {
+        Some(version_file) => version_file,
+        None => {
+            let candidates = vec!["package.json", "Cargo.toml"];
+
+            candidates
+                .into_iter()
+                .find_map(|file_candidate| {
+                    if project_path.join(file_candidate).exists() {
+                        Some(file_candidate.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| "package.json".to_string())
+        }
+    };
+
     let bump_files = match raw_settings.bump_files {
         Some(files) => files,
-        None => generate_default_bump_files(&raw_settings.version_file, project_path),
+        None => generate_default_bump_files(&version_file, project_path),
     };
 
     Ok(Settings {
-        version_file: raw_settings.version_file,
+        version_file,
         bump_files,
         tag_prefix,
     })
