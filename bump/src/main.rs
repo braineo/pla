@@ -1,18 +1,20 @@
-use crate::{repo::Repo, settings::Settings};
-use anyhow::bail;
+use crate::repo::Repo;
+use anyhow::{anyhow, bail, Context, Result};
 use bump_version::{BumpType, BumpVersion};
 use clap::{value_parser, Arg, ArgAction, Command, ValueEnum};
 use clap_complete::{generate, Generator, Shell};
 use cli::prompt_version_select;
-use config::Config;
+
 use log::{debug, info};
 use owo_colors::{colors::xterm, OwoColorize};
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use settings::init_settings;
+use toml_edit::DocumentMut;
 
 use std::{
     env,
-    fs::File,
+    fs::{self, File},
     io,
     path::{Path, PathBuf},
 };
@@ -32,7 +34,7 @@ pub enum Action {
 
 fn cli() -> Command {
     Command::new("bump")
-        .about("bump version in package json, and tag commit")
+        .about("bump version in package.json or Cargo.toml, and tag commit")
         .arg(
             Arg::new("bump_type")
                 .long("type")
@@ -89,6 +91,92 @@ fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
     generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
 }
 
+#[derive(Debug)]
+enum VersionFileFormat {
+    Json,
+    Toml,
+}
+
+fn detect_file_format(file_path: &Path) -> Result<VersionFileFormat> {
+    match file_path.extension().and_then(|ext| ext.to_str()) {
+        Some("json") => Ok(VersionFileFormat::Json),
+        Some("toml") => Ok(VersionFileFormat::Toml),
+        _ => Err(anyhow!(
+            "cannot determine file format for '{}', supported formats are JSON and TOML",
+            file_path.display()
+        )),
+    }
+}
+
+fn get_version_from_file(file_path: &Path) -> Result<Version> {
+    let file_name = match file_path.file_name() {
+        Some(file_name) => file_name,
+        _ => return Err(anyhow!("path does not contain file name")),
+    };
+
+    let format = detect_file_format(file_path)?;
+
+    match format {
+        VersionFileFormat::Json => {
+            let file = File::open(file_path)
+                .with_context(|| format!("Failed to open JSON file: {}", file_path.display()))?;
+            let json: serde_json::Value = serde_json::from_reader(file).context(format!(
+                "Failed to parse JSON from: {}",
+                file_path.display()
+            ))?;
+
+            if let Some(version_value) = json.get("version") {
+                let version_str = version_value
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Version in JSON is not a string"))?;
+                Version::parse(version_str).context(format!(
+                    "Failed to parse version '{}' as semver",
+                    version_str
+                ))
+            } else {
+                bail!("Cannot find 'version' field in {}", file_path.display());
+            }
+        }
+        VersionFileFormat::Toml => {
+            let toml: DocumentMut = fs::read_to_string(file_path)?
+                .parse()
+                .with_context(|| format!("Failed to read TOML file: {}", file_path.display()))?;
+
+            // For Cargo.toml, version is under [package]
+            if file_name == "Cargo.toml" {
+                if let Some(package) = toml.get("package") {
+                    if let Some(version_value) = package.get("version") {
+                        let version_str = version_value
+                            .as_str()
+                            .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
+                        return Version::parse(version_str).context(format!(
+                            "Failed to parse version '{}' as semver",
+                            version_str
+                        ));
+                    }
+                }
+                bail!(
+                    "Cannot find 'package.version' field in {}",
+                    file_path.display()
+                );
+            } else {
+                // For other TOML files, try to find version at the root
+                if let Some(version_value) = toml.get("version") {
+                    let version_str = version_value
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
+                    Version::parse(version_str).context(format!(
+                        "Failed to parse version '{}' as semver",
+                        version_str
+                    ))
+                } else {
+                    bail!("Cannot find 'version' field in {}", file_path.display());
+                }
+            }
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_default_env().init();
 
@@ -111,24 +199,11 @@ fn main() -> anyhow::Result<()> {
         Repo::new(env::current_dir()?)?
     };
 
-    let settings: Settings = Config::builder()
-        .add_source(config::File::from(project_repo.directory.join("bump")).required(false))
-        .build()?
-        .try_deserialize::<Settings>()?;
+    let settings = init_settings(&project_repo.directory)?;
 
-    let package_json_file_name = "package.json";
+    let version_file_name = settings.version_file;
 
-    let package_json_file = File::open(project_repo.directory.join(package_json_file_name))?;
-    let package_json: serde_json::Value = serde_json::from_reader(package_json_file)?;
-
-    let version = if let Some(version_value) = package_json.get("version") {
-        let version_str = version_value
-            .as_str()
-            .expect("it should be able to convert to str");
-        Version::parse(version_str)?
-    } else {
-        bail!("cannot find version in package.json");
-    };
+    let version = get_version_from_file(&project_repo.directory.join(&version_file_name))?;
 
     let prerelease_identifier = matches
         .get_one::<String>("pre_id")
@@ -150,6 +225,7 @@ fn main() -> anyhow::Result<()> {
                 .increment_patch()
                 .append_prerelease_identifiers(&prerelease_identifier),
             BumpType::Prerelease => version.increment_prerelease(),
+            BumpType::Release => version.convert_prerelease_to_release(),
         }
     } else {
         version.clone()
@@ -183,7 +259,7 @@ fn main() -> anyhow::Result<()> {
             next_version.green()
         );
 
-        let file_names = std::iter::once(package_json_file_name.to_string())
+        let file_names = std::iter::once(version_file_name.to_string())
             .chain(settings.bump_files)
             .collect::<Vec<_>>()
             .join(", ");
@@ -210,8 +286,13 @@ fn main() -> anyhow::Result<()> {
     }
 
     info!("bump to version {}", next_version);
-    project_repo.bump_json(package_json_file_name, &next_version)?;
-    project_repo.stage_file(package_json_file_name)?;
+
+    match detect_file_format(&project_repo.directory.join(&version_file_name))? {
+        VersionFileFormat::Json => project_repo.bump_json(&version_file_name, &next_version)?,
+        VersionFileFormat::Toml => project_repo.bump_toml(&version_file_name, &next_version)?,
+    }
+
+    project_repo.stage_file(&version_file_name)?;
 
     debug!("bump other files {:?}", settings.bump_files);
 
@@ -221,7 +302,11 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        project_repo.bump_json(&bump_file, &next_version)?;
+        match detect_file_format(&project_repo.directory.join(&bump_file))? {
+            VersionFileFormat::Json => project_repo.bump_json(&bump_file, &next_version)?,
+            VersionFileFormat::Toml => project_repo.bump_toml(&bump_file, &next_version)?,
+        }
+
         project_repo.stage_file(&bump_file)?;
     }
 
