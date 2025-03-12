@@ -101,10 +101,7 @@ fn detect_file_format(file_path: &Path) -> Result<VersionFileFormat> {
     match file_path.extension().and_then(|ext| ext.to_str()) {
         Some("json") => Ok(VersionFileFormat::Json),
         Some("toml") => Ok(VersionFileFormat::Toml),
-        _ => Err(anyhow!(
-            "cannot determine file format {}, supported formats are JSON and TOML",
-            file_path.display()
-        )),
+        _ => Err(anyhow!("cannot determine file format for '{}', supported formats are JSON and TOML", file_path.display())),
     }
 }
 
@@ -119,7 +116,7 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
     match format {
         VersionFileFormat::Json => {
             let file = File::open(file_path)
-                .context(format!("Failed to open JSON file: {}", file_path.display()))?;
+                .with_context(|| format!("Failed to open JSON file: {}", file_path.display()))?;
             let json: serde_json::Value = serde_json::from_reader(file).context(format!(
                 "Failed to parse JSON from: {}",
                 file_path.display()
@@ -140,7 +137,7 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
         VersionFileFormat::Toml => {
             let toml: DocumentMut = fs::read_to_string(file_path)?
                 .parse()
-                .context(format!("Failed to read TOML file: {}", file_path.display()))?;
+                .with_context(|| format!("Failed to read TOML file: {}", file_path.display()))?;
 
             // For Cargo.toml, version is under [package]
             if file_name == "Cargo.toml" {
