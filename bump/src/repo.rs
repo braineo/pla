@@ -1,7 +1,13 @@
 use anyhow::{anyhow, Context};
 use log::info;
 use serde_json::json;
-use std::{fs::File, io::Write, path::PathBuf, process};
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::PathBuf,
+    process,
+};
+use toml_edit::DocumentMut;
 
 #[derive(Debug, Clone)]
 pub struct Repo {
@@ -48,17 +54,45 @@ impl Repo {
     pub fn bump_json(&self, file_path: &str, next_version: &str) -> anyhow::Result<()> {
         info!("bump {} to {}", file_path, next_version);
         let full_path = self.directory.join(file_path);
-        let json_file = File::open(&full_path)?;
-        let mut package_json: serde_json::Value = serde_json::from_reader(json_file)?;
+        let file_name = match full_path.file_name() {
+            Some(file_name) => file_name,
+            _ => return Err(anyhow!("path does not contain file name")),
+        };
 
-        if let Some(version) = package_json.get_mut("version") {
+        let json_file = File::open(&full_path)?;
+        let mut json_value: serde_json::Value = serde_json::from_reader(json_file)?;
+
+        if let Some(version) = json_value.get_mut("version") {
             *version = json!(next_version);
         }
 
+        if file_name.to_string_lossy() == "pacakge-lock.json" {
+            if let Some(version) = json_value.pointer_mut("/packages//version") {
+                *version = json!(next_version)
+            }
+        };
+
         let mut file = File::create(&full_path)?;
-        let updated_package_json_str = serde_json::to_string_pretty(&package_json)?;
+        let updated_package_json_str = serde_json::to_string_pretty(&json_value)?;
 
         file.write_all(updated_package_json_str.as_bytes())?;
+
+        Ok(())
+    }
+
+    pub fn bump_toml(&self, file_path: &str, next_version: &str) -> anyhow::Result<()> {
+        info!("bump {} to {}", file_path, next_version);
+        let full_path = self.directory.join(file_path);
+        // let file_name = match full_path.file_name() {
+        //     Some(file_name) => file_name,
+        //     _ => return Err(anyhow!("path does not contain file name")),
+        // };
+
+        let mut toml_doc: DocumentMut = fs::read_to_string(&full_path)?
+            .parse()
+            .context(format!("Failed to read TOML file: {}", full_path.display()))?;
+
+        toml_doc["package"]["version"] = toml_edit::value(next_version);
 
         Ok(())
     }
