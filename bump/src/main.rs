@@ -101,7 +101,10 @@ fn detect_file_format(file_path: &Path) -> Result<VersionFileFormat> {
     match file_path.extension().and_then(|ext| ext.to_str()) {
         Some("json") => Ok(VersionFileFormat::Json),
         Some("toml") => Ok(VersionFileFormat::Toml),
-        _ => Err(anyhow!("cannot determine file format for '{}', supported formats are JSON and TOML", file_path.display())),
+        _ => Err(anyhow!(
+            "cannot determine file format for '{}', supported formats are JSON and TOML",
+            file_path.display()
+        )),
     }
 }
 
