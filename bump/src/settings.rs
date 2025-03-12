@@ -21,7 +21,7 @@ const CONFIG_FILE_NAME: &str = "bump";
 
 pub fn init_settings(project_path: &Path) -> anyhow::Result<Settings> {
     let raw_settings = Config::builder()
-        .add_source(config::File::from(project_path.join("bump")).required(false))
+        .add_source(config::File::from(project_path.join(CONFIG_FILE_NAME)).required(false))
         .build()?
         .try_deserialize::<RawSettings>()?;
 
@@ -41,9 +41,6 @@ pub fn init_settings(project_path: &Path) -> anyhow::Result<Settings> {
 
 fn generate_default_bump_files(version_file: &str, project_path: &Path) -> Vec<String> {
     let mut bump_files = Vec::new();
-
-    // Add the version file itself
-    bump_files.push(version_file.to_string());
 
     // Add additional files based on the version file type
     match version_file {

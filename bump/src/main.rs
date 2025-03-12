@@ -10,10 +10,11 @@ use owo_colors::{colors::xterm, OwoColorize};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use settings::init_settings;
+use toml_edit::DocumentMut;
 
 use std::{
     env,
-    fs::File,
+    fs::{self, File},
     io,
     path::{Path, PathBuf},
 };
@@ -33,7 +34,7 @@ pub enum Action {
 
 fn cli() -> Command {
     Command::new("bump")
-        .about("bump version in package json, and tag commit")
+        .about("bump version in package.json or Cargo.toml, and tag commit")
         .arg(
             Arg::new("bump_type")
                 .long("type")
@@ -112,7 +113,7 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
         Some(file_name) => file_name,
         _ => return Err(anyhow!("path does not contain file name")),
     };
-    let format = detect_file_format(&file_path);
+    let format = detect_file_format(file_path);
 
     match format {
         VersionFileFormat::Json => {
@@ -136,12 +137,9 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
             }
         }
         VersionFileFormat::Toml => {
-            let content = fs::read_to_string(file_path)
+            let toml: DocumentMut = fs::read_to_string(file_path)?
+                .parse()
                 .context(format!("Failed to read TOML file: {}", file_path.display()))?;
-            let toml: toml::Value = toml::from_str(&content).context(format!(
-                "Failed to parse TOML from: {}",
-                file_path.display()
-            ))?;
 
             // For Cargo.toml, version is under [package]
             if file_name == "Cargo.toml" {
@@ -204,17 +202,7 @@ fn main() -> anyhow::Result<()> {
 
     let version_file_name = settings.version_file;
 
-    let package_json_file = File::open(project_repo.directory.join(version_file_name))?;
-    let package_json: serde_json::Value = serde_json::from_reader(package_json_file)?;
-
-    let version = if let Some(version_value) = package_json.get("version") {
-        let version_str = version_value
-            .as_str()
-            .expect("it should be able to convert to str");
-        Version::parse(version_str)?
-    } else {
-        bail!("cannot find version in package.json");
-    };
+    let version = get_version_from_file(&project_repo.directory.join(&version_file_name))?;
 
     let prerelease_identifier = matches
         .get_one::<String>("pre_id")
