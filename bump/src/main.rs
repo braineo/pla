@@ -286,7 +286,12 @@ fn main() -> anyhow::Result<()> {
     }
 
     info!("bump to version {}", next_version);
-    project_repo.bump_json(&version_file_name, &next_version)?;
+
+    match detect_file_format(&project_repo.directory.join(&version_file_name))? {
+        VersionFileFormat::Json => project_repo.bump_json(&version_file_name, &next_version)?,
+        VersionFileFormat::Toml => project_repo.bump_toml(&version_file_name, &next_version)?,
+    }
+
     project_repo.stage_file(&version_file_name)?;
 
     debug!("bump other files {:?}", settings.bump_files);
@@ -297,7 +302,11 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        project_repo.bump_json(&bump_file, &next_version)?;
+        match detect_file_format(&project_repo.directory.join(&bump_file))? {
+            VersionFileFormat::Json => project_repo.bump_json(&bump_file, &next_version)?,
+            VersionFileFormat::Toml => project_repo.bump_toml(&bump_file, &next_version)?,
+        }
+
         project_repo.stage_file(&bump_file)?;
     }
 

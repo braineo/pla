@@ -83,16 +83,14 @@ impl Repo {
     pub fn bump_toml(&self, file_path: &str, next_version: &str) -> anyhow::Result<()> {
         info!("bump {} to {}", file_path, next_version);
         let full_path = self.directory.join(file_path);
-        // let file_name = match full_path.file_name() {
-        //     Some(file_name) => file_name,
-        //     _ => return Err(anyhow!("path does not contain file name")),
-        // };
 
         let mut toml_doc: DocumentMut = fs::read_to_string(&full_path)?
             .parse()
             .context(format!("Failed to read TOML file: {}", full_path.display()))?;
 
         toml_doc["package"]["version"] = toml_edit::value(next_version);
+
+        fs::write(&full_path, toml_doc.to_string())?;
 
         Ok(())
     }
