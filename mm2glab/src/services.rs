@@ -1,5 +1,6 @@
 use crate::api::gitlab::{GitLabApi, GitLabClient};
 use crate::api::mattermost::{MattermostApi, MattermostClient};
+use crate::settings::merge_settings_with_args;
 use crate::{cli::Args, models::*};
 
 use anyhow::Result;
@@ -25,6 +26,8 @@ const ISSUE_TEMPLATE: &str = r#"
 "#;
 
 pub async fn run(args: Args) -> Result<()> {
+    let args = merge_settings_with_args(&args)?;
+
     let mm_client = MattermostClient::new(args.mm_url, args.mm_token);
     let gitlab_client = GitLabClient::new(args.gitlab_url, args.gitlab_token, args.project_id);
 
