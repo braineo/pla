@@ -5,6 +5,7 @@ mod api;
 mod cli;
 mod models;
 mod services;
+mod settings;
 
 #[tokio::main]
 async fn main() {

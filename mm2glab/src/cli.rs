@@ -3,7 +3,7 @@ use std::fmt;
 use clap::{Parser, ValueEnum};
 use log::LevelFilter;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     /// Mattermost permanent link to the thread
