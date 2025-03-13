@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf};
 
 use config::{Config, File};
+use log::debug;
 use serde::Deserialize;
 
 use crate::cli::Args;
@@ -79,6 +80,8 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
             new_args.ollama_model = ollama_model;
         }
     }
+
+    debug!("merged config: {:?}", new_args);
 
     Ok(new_args)
 }
