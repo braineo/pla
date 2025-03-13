@@ -46,7 +46,7 @@ pub async fn run(args: Args) -> Result<()> {
     spinner.enable_steady_tick(Duration::from_millis(100));
 
     let (ai_title, ai_description, ai_reason) =
-        analyze_conversation(&conversation, args.ollama_model).await?;
+        analyze_conversation(&conversation, args.ollama_model, &args.prompt).await?;
 
     spinner.finish_and_clear();
 
@@ -143,61 +143,10 @@ async fn get_conversation_from_thread(
     Ok(conversations)
 }
 
-const PROMPT_TEMPLATE: &str = r#"
-# GitHub Issue Generator
-
-As an expert software developer and technical writer, your task is to convert the following Mattermost thread content into a well-structured GitHub issue.
-
-## Input
-
-```
-CONVERSATION_PLACEHOLDER
-```
-
-## Instructions
-
-1. Analyze the provided thread content carefully to determine whether it describes a bug report or a feature request.
-
-2. Generate a concise, descriptive title for the issue that clearly communicates the core problem or feature.
-
-3. Create a comprehensive issue description with appropriate sections based on the content type:
-
-### For Bug Reports:
-- **Background**: Context about where and how the issue was discovered
-- **Description**: Clear explanation of the problem
-- **Expected Behavior**: What should happen
-- **Actual Behavior**: What is currently happening
-- **Reproduction Steps**: Numbered list of steps to reproduce the issue
-- **Environment**: Relevant information to reproduce the bug like software names, versions, etc.
-- **Impact**: The effect of this bug on users/system
-- **Possible Solutions**: Any suggestions from the thread
-
-### For Feature Requests:
-- **Background**: Context about why this feature is being requested
-- **Motivation**: The problem this feature would solve
-- **Description**: Clear explanation of the proposed feature
-- **Use Cases**: Specific scenarios where this feature would be valuable
-- **Proposed Implementation**: Any technical suggestions from the thread
-- **Alternatives Considered**: Other approaches mentioned
-- **Success Metrics**: How to determine if the feature is successful
-
-4. If the thread contains both bug reports and feature requests and related, see if you can combine two together in the description.
-
-5. If the thread contains both bug reports and feature requests and unrelated, split them with a horizonal splitter in-between.
-
-## Output Format
-
-Remember to maintain the original technical details while organizing them in a clear, scannable structure that will help developers understand and address the issue efficiently.
-
-Respond in this exact format with nothing else.
-
-title: <Concise and descriptive title in exactly one line>
-description: <Full formatted description with appropriate sections from above>
-"#;
-
 async fn analyze_conversation(
     conversation: &[Conversation],
     ollama_model: String,
+    prompt_template: &str,
 ) -> Result<(String, String, String)> {
     let formatted_conv: String = conversation
         .iter()
@@ -206,7 +155,7 @@ async fn analyze_conversation(
         .join("\n");
 
     let ollama = Ollama::default();
-    let prompt = PROMPT_TEMPLATE.replace("CONVERSATION_PLACEHOLDER", &formatted_conv);
+    let prompt = prompt_template.replace("CONVERSATION_PLACEHOLDER", &formatted_conv);
     debug!("feeding prompt to LLM:\n{prompt}");
 
     let req = GenerationRequest::new(ollama_model, prompt);

@@ -6,6 +6,58 @@ use serde::Deserialize;
 
 use crate::cli::Args;
 
+pub const DEFAULT_PROMPT_TEMPLATE: &str = r#"
+# GitHub Issue Generator
+
+As an expert software developer and technical writer, your task is to convert the following Mattermost thread content into a well-structured GitHub issue.
+
+## Input
+
+```
+CONVERSATION_PLACEHOLDER
+```
+
+## Instructions
+
+1. Analyze the provided thread content carefully to determine whether it describes a bug report or a feature request.
+
+2. Generate a concise, descriptive title for the issue that clearly communicates the core problem or feature.
+
+3. Create a comprehensive issue description with appropriate sections based on the content type:
+
+### For Bug Reports:
+- **Background**: Context about where and how the issue was discovered
+- **Description**: Clear explanation of the problem
+- **Expected Behavior**: What should happen
+- **Actual Behavior**: What is currently happening
+- **Reproduction Steps**: Numbered list of steps to reproduce the issue
+- **Environment**: Relevant information to reproduce the bug like software names, versions, etc.
+- **Impact**: The effect of this bug on users/system
+- **Possible Solutions**: Any suggestions from the thread
+
+### For Feature Requests:
+- **Background**: Context about why this feature is being requested
+- **Motivation**: The problem this feature would solve
+- **Description**: Clear explanation of the proposed feature
+- **Use Cases**: Specific scenarios where this feature would be valuable
+- **Proposed Implementation**: Any technical suggestions from the thread
+- **Alternatives Considered**: Other approaches mentioned
+- **Success Metrics**: How to determine if the feature is successful
+
+4. If the thread contains both bug reports and feature requests and related, see if you can combine two together in the description.
+
+5. If the thread contains both bug reports and feature requests and unrelated, split them with a horizonal splitter in-between.
+
+## Output Format
+
+Remember to maintain the original technical details while organizing them in a clear, scannable structure that will help developers understand and address the issue efficiently.
+
+Respond in this exact format with nothing else.
+
+title: <Concise and descriptive title in exactly one line>
+description: <Full formatted description with appropriate sections from above>
+"#;
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub mm_url: Option<String>,
@@ -14,6 +66,7 @@ pub struct Settings {
     pub gitlab_token: Option<String>,
     pub project_id: Option<String>,
     pub ollama_model: Option<String>,
+    pub prompt: Option<String>,
 }
 
 const CONFIG_FILE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -45,6 +98,7 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
         gitlab_token: None,
         project_id: None,
         ollama_model: None,
+        prompt: None,
     };
 
     if let Some(xdg_config) = get_xdg_config_path() {
@@ -81,6 +135,12 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
     apply_if_empty!(new_args, gitlab_url, settings);
     apply_if_empty!(new_args, gitlab_token, settings);
     apply_if_empty!(new_args, project_id, settings);
+    apply_if_empty!(new_args, prompt, settings);
+
+    // If no prompt is provided in either CLI or config, use the default template
+    if new_args.prompt.is_empty() {
+        new_args.prompt = DEFAULT_PROMPT_TEMPLATE.to_string();
+    }
 
     if let Some(ollama_model) = settings.ollama_model {
         if !ollama_model.is_empty() && new_args.ollama_model == "deepseek-r1:latest" {
