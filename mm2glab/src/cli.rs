@@ -45,6 +45,10 @@ pub struct Args {
     #[arg(long, default_value = "deepseek-r1:latest")]
     pub ollama_model: String,
 
+    /// Custom prompt template for LLM
+    #[arg(long, default_value = "")]
+    pub prompt: String,
+
     /// Log verbosity
     #[arg(short, long, value_name = "LEVEL", default_value_t = LogLevel::Info)]
     pub log_level: LogLevel,
