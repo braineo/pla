@@ -46,7 +46,7 @@ CONVERSATION_PLACEHOLDER
 
 4. If the thread contains both bug reports and feature requests and related, see if you can combine two together in the description.
 
-5. If the thread contains both bug reports and feature requests and unrelated, split them with a horizonal splitter in-between.
+5. If the thread contains both bug reports and feature requests and unrelated, split them with a horizontal splitter in-between.
 
 ## Output Format
 
