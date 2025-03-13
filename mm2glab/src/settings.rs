@@ -14,7 +14,7 @@ As an expert software developer and technical writer, your task is to convert th
 ## Input
 
 ```
-CONVERSATION_PLACEHOLDER
+{{ conversation }}
 ```
 
 ## Instructions
