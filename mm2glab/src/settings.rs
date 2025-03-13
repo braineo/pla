@@ -51,9 +51,16 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
         let config_path = xdg_config.join(CONFIG_FILE_NAME).join("config.toml");
         if config_path.exists() {
             settings = config_builder
-                .add_source(File::from(config_path).required(false))
+                .add_source(File::from(config_path.clone()).required(false))
                 .build()?
-                .try_deserialize()?
+                .try_deserialize()
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to deserialize config file {}: {}",
+                        config_path.display(),
+                        e
+                    )
+                })?
         }
     }
 
