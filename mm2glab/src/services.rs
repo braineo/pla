@@ -294,7 +294,11 @@ fn format_conversation(conversation: &Conversation) -> String {
     )
 }
 
-fn format_issue_description(source_link: &str, ai_description: &str, ai_reason: &str) -> Result<String> {
+fn format_issue_description(
+    source_link: &str,
+    ai_description: &str,
+    ai_reason: &str,
+) -> Result<String> {
     let template_context = IssueTemplateContext {
         source_link: source_link.to_string(),
         description: ai_description.to_string(),
@@ -302,8 +306,10 @@ fn format_issue_description(source_link: &str, ai_description: &str, ai_reason: 
     };
 
     let mut tera = Tera::default();
-    let context = Context::from_serialize(&template_context).map_err(|e| anyhow::anyhow!("Failed to create template context: {}", e))?;
-    tera.render_str(ISSUE_TEMPLATE, &context).map_err(|e| anyhow::anyhow!("Failed to render template: {}", e))
+    let context = Context::from_serialize(&template_context)
+        .map_err(|e| anyhow::anyhow!("Failed to create template context: {}", e))?;
+    tera.render_str(ISSUE_TEMPLATE, &context)
+        .map_err(|e| anyhow::anyhow!("Failed to render template: {}", e))
 }
 
 fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String)> {
