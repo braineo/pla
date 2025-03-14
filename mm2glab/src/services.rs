@@ -1,7 +1,9 @@
 use crate::api::gitlab::{GitLabApi, GitLabClient};
 use crate::api::mattermost::{MattermostApi, MattermostClient};
+use crate::models::gitlab::Issue;
+use crate::models::mattermost::Thread;
 use crate::settings::merge_settings_with_args;
-use crate::{cli::Args, models::*};
+use crate::{cli::Args, models::Conversation};
 
 use anyhow::Result;
 use chrono::{Local, TimeZone};
@@ -77,7 +79,7 @@ pub async fn run(args: Args) -> Result<()> {
     let conversation_markdown =
         format_conversation_and_attachments(&conversation, &mm_client, &gitlab_client).await?;
 
-    let issue = GitLabIssue {
+    let issue = Issue {
         title: final_title.clone(),
         description: format!("{final_description}\n\n{conversation_markdown}"),
     };
@@ -101,7 +103,7 @@ pub async fn run(args: Args) -> Result<()> {
 }
 
 async fn get_conversation_from_thread(
-    thread: &MattermostThread,
+    thread: &Thread,
     target_post_id: &str,
     mm_client: &impl MattermostApi,
 ) -> Result<Vec<Conversation>> {
@@ -243,15 +245,7 @@ async fn format_conversation_and_attachments(
 
                         match gitlab_client.upload_file(&file_path).await {
                             Ok(upload) => {
-                                if content_type.starts_with("image/")
-                                    || content_type.starts_with("video/")
-                                {
-                                    markdown_lines
-                                        .push(format!("{}{{width=60%}}\n", upload.markdown));
-                                } else {
-                                    markdown_lines
-                                        .push(format!("- [{}]({})\n", filename, upload.url));
-                                }
+                                markdown_lines.push(format!("{}{{width=60%}}\n", upload.markdown));
                             }
                             Err(e) => {
                                 eprintln!(

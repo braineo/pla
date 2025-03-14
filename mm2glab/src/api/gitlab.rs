@@ -3,12 +3,12 @@ use async_trait::async_trait;
 use reqwest::{header, multipart, Client};
 use std::{path::Path, time::Duration};
 
-use crate::models::{GitLabIssue, GitLabUploadResponse};
+use crate::models::gitlab::{Issue, UploadResponse};
 
 #[async_trait]
 pub trait GitLabApi {
-    async fn create_issue(&self, issue: &GitLabIssue) -> Result<String>;
-    async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse>;
+    async fn create_issue(&self, issue: &Issue) -> Result<String>;
+    async fn upload_file(&self, path: &Path) -> Result<UploadResponse>;
 }
 
 pub struct GitLabClient {
@@ -43,7 +43,7 @@ impl GitLabClient {
 
 #[async_trait]
 impl GitLabApi for GitLabClient {
-    async fn create_issue(&self, issue: &GitLabIssue) -> Result<String> {
+    async fn create_issue(&self, issue: &Issue) -> Result<String> {
         let url = format!(
             "{}/api/v4/projects/{}/issues",
             self.base_url, self.project_id
@@ -61,7 +61,7 @@ impl GitLabApi for GitLabClient {
         Ok(response["web_url"].as_str().unwrap_or_default().to_string())
     }
 
-    async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse> {
+    async fn upload_file(&self, path: &Path) -> Result<UploadResponse> {
         let url = format!(
             "{}/api/v4/projects/{}/uploads",
             self.base_url, self.project_id
@@ -93,7 +93,7 @@ impl GitLabApi for GitLabClient {
         }
 
         // Only try to parse as JSON if we got a success status
-        let gitlab_response: GitLabUploadResponse = response.json().await?;
+        let gitlab_response: UploadResponse = response.json().await?;
 
         Ok(gitlab_response)
     }
