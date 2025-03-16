@@ -56,7 +56,7 @@ pub async fn run(args: Args) -> Result<()> {
     spinner.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner} {msg}")
-            .unwrap(),
+            .map_err(|e| anyhow::anyhow!("Failed to create progress style: {}", e))?,
     );
     spinner.set_message("Generating title and description from LLM...");
     spinner.enable_steady_tick(Duration::from_millis(100));
@@ -229,7 +229,7 @@ async fn format_conversation_and_attachments(
         conversations
             .iter()
             .filter(|c| c.file_ids.is_some())
-            .map(|p| p.file_ids.as_ref().unwrap().len())
+            .map(|p| p.file_ids.as_ref().map_or(0, |ids| ids.len()))
             .sum::<usize>() as u64,
     );
 
