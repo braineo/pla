@@ -13,14 +13,14 @@ pub struct Post {
 
 #[derive(Debug, Deserialize)]
 pub struct PostMetaFile {
-    id: String,
-    mime_type: String,
-    name: String,
+    pub id: String,
+    pub mime_type: String,
+    pub name: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct PostMetaData {
-    files: Vec<PostMetaFile>,
+    pub files: Option<Vec<PostMetaFile>>,
 }
 
 #[derive(Debug, Deserialize)]
