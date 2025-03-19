@@ -1,4 +1,4 @@
-use crate::models::*;
+use crate::models::mattermost::{Post, Thread, User};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::{header, Client};
@@ -6,8 +6,8 @@ use std::time::Duration;
 
 #[async_trait]
 pub trait MattermostApi {
-    async fn get_thread(&self, post_id: &str) -> Result<MattermostThread>;
-    async fn get_user(&self, user_id: &str) -> Result<MattermostUser>;
+    async fn get_thread(&self, post_id: &str) -> Result<Thread>;
+    async fn get_user(&self, user_id: &str) -> Result<User>;
     async fn create_post(
         &self,
         channel_id: &str,
@@ -15,7 +15,7 @@ pub trait MattermostApi {
         root_id: Option<&str>,
     ) -> Result<()>;
     async fn download_file(&self, file_id: &str) -> Result<(String, Vec<u8>, String)>;
-    async fn get_post(&self, post_id: &str) -> Result<MattermostPost>;
+    async fn get_post(&self, post_id: &str) -> Result<Post>;
 
     fn get_file_url(&self, file_id: &str) -> String;
 }
@@ -58,13 +58,13 @@ impl MattermostClient {
 
 #[async_trait]
 impl MattermostApi for MattermostClient {
-    async fn get_thread(&self, post_id: &str) -> Result<MattermostThread> {
+    async fn get_thread(&self, post_id: &str) -> Result<Thread> {
         let url = format!("{}/api/v4/posts/{}/thread", self.base_url, post_id);
         let response = self.client.get(&url).send().await?.json().await?;
         Ok(response)
     }
 
-    async fn get_user(&self, user_id: &str) -> Result<MattermostUser> {
+    async fn get_user(&self, user_id: &str) -> Result<User> {
         let url = format!("{}/api/v4/users/{}", self.base_url, user_id);
         let response = self.client.get(&url).send().await?.json().await?;
         Ok(response)
@@ -119,7 +119,7 @@ impl MattermostApi for MattermostClient {
         Ok((filename, bytes, content_type))
     }
 
-    async fn get_post(&self, post_id: &str) -> Result<MattermostPost> {
+    async fn get_post(&self, post_id: &str) -> Result<Post> {
         let url = format!("{}/api/v4/posts/{}", self.base_url, post_id);
         let response = self.client.get(&url).send().await?.json().await?;
         Ok(response)

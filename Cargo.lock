@@ -1618,6 +1618,7 @@ version = "0.1.1-beta.5"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.21.7",
  "chrono",
  "clap",
  "config 0.15.11",
