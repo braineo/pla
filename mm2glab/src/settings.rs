@@ -150,5 +150,25 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
 
     debug!("merged config: {:?}", new_args);
 
+    let missing_required_fields = [
+        ("Gitlab URL", new_args.gitlab_url.is_empty()),
+        ("Gitlab Token", new_args.gitlab_token.is_empty()),
+        ("Gitlab Project ID", new_args.project_id.is_empty()),
+        ("Mattermost URL", new_args.mm_url.is_empty()),
+        ("Mattermost Token", new_args.mm_token.is_empty()),
+    ]
+    .iter()
+    .filter_map(|(name, is_empty)| if *is_empty { Some(*name) } else { None })
+    .collect::<Vec<_>>();
+
+    if !missing_required_fields.is_empty() {
+        eprintln!(
+            "Error: The following required fields are missing: {}",
+            missing_required_fields.join(", ")
+        );
+        eprintln!("Please specify with CLI flag, environment variable, or in config.toml");
+        std::process::exit(1);
+    }
+
     Ok(new_args)
 }

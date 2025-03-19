@@ -14,23 +14,48 @@ pub struct Args {
     pub title: Option<String>,
 
     /// Mattermost server URL
-    #[arg(long, env = "MATTERMOST_URL")]
+    #[arg(
+        long,
+        env = "MATTERMOST_URL",
+        default_value = "",
+        hide_default_value = true
+    )]
     pub mm_url: String,
 
     /// Mattermost access token
-    #[arg(long, env = "MATTERMOST_TOKEN")]
+    #[arg(
+        long,
+        env = "MATTERMOST_TOKEN",
+        default_value = "",
+        hide_default_value = true
+    )]
     pub mm_token: String,
 
     /// GitLab server URL
-    #[arg(long, env = "GITLAB_URL")]
+    #[arg(
+        long,
+        env = "GITLAB_URL",
+        default_value = "",
+        hide_default_value = true
+    )]
     pub gitlab_url: String,
 
     /// GitLab access token
-    #[arg(long, env = "GITLAB_TOKEN")]
+    #[arg(
+        long,
+        env = "GITLAB_TOKEN",
+        default_value = "",
+        hide_default_value = true
+    )]
     pub gitlab_token: String,
 
     /// GitLab project ID
-    #[arg(long, env = "GITLAB_PROJECT_ID")]
+    #[arg(
+        long,
+        env = "GITLAB_PROJECT_ID",
+        default_value = "",
+        hide_default_value = true
+    )]
     pub project_id: String,
 
     /// Disable reply in Mattermost thread
@@ -46,7 +71,7 @@ pub struct Args {
     pub ollama_model: String,
 
     /// Custom prompt template for LLM
-    #[arg(long, default_value = "")]
+    #[arg(long, default_value = "", hide_default_value = true)]
     pub prompt: String,
 
     /// Log verbosity
