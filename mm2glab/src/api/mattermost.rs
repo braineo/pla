@@ -31,14 +31,15 @@ impl MattermostClient {
         let mut headers = header::HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+            header::HeaderValue::from_str(&format!("Bearer {}", token))
+                .expect("Failed to create header value from token string"),
         );
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .default_headers(headers)
             .build()
-            .unwrap();
+            .expect("Failed to build HTTP client");
 
         Self {
             client,

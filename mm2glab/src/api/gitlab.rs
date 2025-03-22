@@ -23,14 +23,15 @@ impl GitLabClient {
         let mut headers = header::HeaderMap::new();
         headers.insert(
             "PRIVATE-TOKEN",
-            header::HeaderValue::from_str(&token).unwrap(),
+            header::HeaderValue::from_str(&token)
+                .expect("Failed to create header value from token string"),
         );
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .default_headers(headers)
             .build()
-            .unwrap();
+            .expect("Failed to build HTTP client");
 
         Self {
             client,

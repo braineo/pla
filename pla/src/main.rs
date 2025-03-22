@@ -102,7 +102,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                         package_install_path, dependency.version
                     );
 
-                    let package_name = package_install_path.rsplit("node_modules/").next().unwrap();
+                    let package_name = package_install_path
+                        .rsplit("node_modules/")
+                        .next()
+                        .unwrap_or("unknown");
 
                     let versions = package_versions
                         .entry(package_name.to_string())
