@@ -166,7 +166,18 @@ async fn analyze_conversation(
 ) -> Result<(String, String, String)> {
     let formatted_conv: String = conversation
         .iter()
-        .map(|c| format!("{}: {}", c.username, c.message))
+        .map(|c| {
+            if let Some(file_ids) = &c.file_ids {
+                format!(
+                    "{}: {} (uploaded files {})",
+                    c.username,
+                    c.message,
+                    file_ids.join(", ")
+                )
+            } else {
+                format!("{}: {}", c.username, c.message)
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -239,7 +250,7 @@ async fn format_conversation_and_attachments(
         if let Some(file_ids) = &post.file_ids {
             for file_id in file_ids {
                 match mm_client.download_file(file_id).await {
-                    Ok((filename, content, content_type)) => {
+                    Ok((filename, content, _)) => {
                         let file_path = temp_dir.path().join(&filename);
                         tokio::fs::write(&file_path, &content).await?;
 

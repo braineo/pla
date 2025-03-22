@@ -48,6 +48,10 @@ As an expert software developer and technical writer, your task is to convert th
 
 5. If the thread contains both bug reports and feature requests and unrelated, split them with a horizontal splitter in-between.
 
+6. In the conversation, some users may upload files. If there are files uploaded, you should include them in the description by judging if the file is relevant to the issue description.
+
+7. When inserting files, you should insert them in a new line with tera template `{{ file_name }}`.
+
 ## Output Format
 
 Remember to maintain the original technical details while organizing them in a clear, scannable structure that will help developers understand and address the issue efficiently.
