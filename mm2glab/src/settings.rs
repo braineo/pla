@@ -13,9 +13,11 @@ As an expert software developer and technical writer, your task is to convert th
 
 ## Input
 
-```
+<begin of converstion>
+
 {{ conversation }}
-```
+
+<end of converstion>
 
 ## Instructions
 
@@ -24,6 +26,8 @@ As an expert software developer and technical writer, your task is to convert th
 2. Generate a concise, descriptive title for the issue that clearly communicates the core problem or feature.
 
 3. Create a comprehensive issue description with appropriate sections based on the content type:
+
+4. In the thread, reporter may upload files to explain. Those are the **ONLY** files you should include in the description. Analyze the context to determine if the files are related to bug report or proposed solution. When inserting files, you should insert them in a new line with in tera template format {% raw %}`{{ file_name }}`{% endraw %}.
 
 ### For Bug Reports:
 - **Background**: Context about where and how the issue was discovered
@@ -34,6 +38,7 @@ As an expert software developer and technical writer, your task is to convert th
 - **Environment**: Relevant information to reproduce the bug like software names, versions, etc.
 - **Impact**: The effect of this bug on users/system
 - **Possible Solutions**: Any suggestions from the thread
+- **Related Files**: Files uploaded by reporter that are relevant to the issue description
 
 ### For Feature Requests:
 - **Background**: Context about why this feature is being requested
@@ -43,14 +48,11 @@ As an expert software developer and technical writer, your task is to convert th
 - **Proposed Implementation**: Any technical suggestions from the thread
 - **Alternatives Considered**: Other approaches mentioned
 - **Success Metrics**: How to determine if the feature is successful
+- **Related Files**: Files uploaded by user that are possibly the suggested solution
 
-4. If the thread contains both bug reports and feature requests and related, see if you can combine two together in the description.
+5. If the thread contains both bug reports and feature requests and related, see if you can combine two together in the description.
 
-5. If the thread contains both bug reports and feature requests and unrelated, split them with a horizontal splitter in-between.
-
-6. In the conversation, some users may upload files. If there are files uploaded, you should include them in the description by judging if the file is relevant to the issue description.
-
-7. When inserting files, you should insert them in a new line with tera template `{{ file_name }}`.
+6. If the thread contains both bug reports and feature requests and unrelated, split them with a horizontal splitter in-between.
 
 ## Output Format
 

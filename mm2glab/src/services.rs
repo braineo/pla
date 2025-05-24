@@ -151,6 +151,11 @@ async fn get_conversation_from_thread(
                         .ok_or_else(|| anyhow::anyhow!("Invalid timestamp"))?,
                     message: post.message.clone(),
                     file_ids: post.file_ids.clone(),
+                    file_meta: post
+                        .metadata
+                        .files
+                        .as_ref()
+                        .map_or_else(Vec::new, |v| v.clone()),
                 });
             }
         }
@@ -167,15 +172,20 @@ async fn analyze_conversation(
     let formatted_conv: String = conversation
         .iter()
         .map(|c| {
-            if let Some(file_ids) = &c.file_ids {
+            //if let Some(file_meta) =
+            if !c.file_ids.is_empty() {
                 format!(
-                    "{}: {} (uploaded files {})",
+                    "{}: check these files: {}.\n{}\n ",
                     c.username,
+                    c.file_meta
+                        .iter()
+                        .map(|meta| format!("{}.{}", meta.id, meta.extension))
+                        .collect::<Vec<_>>()
+                        .join(", "),
                     c.message,
-                    file_ids.join(", ")
                 )
             } else {
-                format!("{}: {}", c.username, c.message)
+                format!("{}:\n{}\n", c.username, c.message)
             }
         })
         .collect::<Vec<_>>()
@@ -239,42 +249,39 @@ async fn format_conversation_and_attachments(
     let progress = ProgressBar::new(
         conversations
             .iter()
-            .filter(|c| c.file_ids.is_some())
-            .map(|p| p.file_ids.as_ref().map_or(0, |ids| ids.len()))
+            .map(|p| p.file_ids.len())
             .sum::<usize>() as u64,
     );
 
     for post in conversations.iter() {
         markdown_lines.push(format_conversation(post));
 
-        if let Some(file_ids) = &post.file_ids {
-            for file_id in file_ids {
-                match mm_client.download_file(file_id).await {
-                    Ok((filename, content, _)) => {
-                        let file_path = temp_dir.path().join(&filename);
-                        tokio::fs::write(&file_path, &content).await?;
+        for file_id in &post.file_ids {
+            match mm_client.download_file(file_id).await {
+                Ok((filename, content, _)) => {
+                    let file_path = temp_dir.path().join(&filename);
+                    tokio::fs::write(&file_path, &content).await?;
 
-                        match gitlab_client.upload_file(&file_path).await {
-                            Ok(upload) => {
-                                markdown_lines.push(format!("{}{{width=60%}}\n", upload.markdown));
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "Failed to upload file {}: {}, use mattermost link instead",
-                                    file_id, e
-                                );
-                                markdown_lines.push(format!(
-                                    "- [{}]({})\n",
-                                    filename,
-                                    mm_client.get_file_url(file_id)
-                                ));
-                            }
+                    match gitlab_client.upload_file(&file_path).await {
+                        Ok(upload) => {
+                            markdown_lines.push(format!("{}{{width=60%}}\n", upload.markdown));
                         }
-
-                        progress.inc(1);
+                        Err(e) => {
+                            eprintln!(
+                                "Failed to upload file {}: {}, use mattermost link instead",
+                                file_id, e
+                            );
+                            markdown_lines.push(format!(
+                                "- [{}]({})\n",
+                                filename,
+                                mm_client.get_file_url(file_id)
+                            ));
+                        }
                     }
-                    Err(e) => eprintln!("Failed to download file {}: {}", file_id, e),
+
+                    progress.inc(1);
                 }
+                Err(e) => eprintln!("Failed to download file {}: {}", file_id, e),
             }
         }
     }
