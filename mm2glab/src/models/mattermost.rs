@@ -7,20 +7,21 @@ pub struct Post {
     pub channel_id: String,
     pub message: String,
     pub create_at: i64,
-    pub file_ids: Option<Vec<String>>,
+    pub file_ids: Vec<String>,
     pub metadata: PostMetaData,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PostMetaFile {
-    id: String,
-    mime_type: String,
-    name: String,
+    pub id: String,
+    pub mime_type: String,
+    pub name: String,
+    pub extension: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PostMetaData {
-    files: Vec<PostMetaFile>,
+    pub files: Option<Vec<PostMetaFile>>,
 }
 
 #[derive(Debug, Deserialize)]
