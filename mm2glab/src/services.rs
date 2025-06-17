@@ -8,8 +8,8 @@ use chrono::{Local, TimeZone};
 use dialoguer::Editor;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::debug;
-use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
+use ollama_rs::generation::completion::request::GenerationRequest;
 use regex::Regex;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -37,6 +37,25 @@ const ISSUE_TEMPLATE: &str = r#"
 
 {{ reason }}
 </details>
+"#;
+
+#[derive(serde::Serialize)]
+struct ConversationTemplateContext {
+    conversation: String,
+    medias: String,
+}
+
+const CONVERSATION_TEMPLATE: &str = r#"
+<details>
+
+<summary>Open Conversation Thread</summary>
+
+{{ conversation }}
+</details>
+
+## Medias
+
+{{ medias }}
 "#;
 
 pub async fn run(args: Args) -> Result<()> {
@@ -223,6 +242,8 @@ async fn format_conversation_and_attachments(
     let temp_dir = TempDir::new()?;
     let mut markdown_lines = Vec::new();
 
+    let mut upload_markdown_lines = Vec::new();
+
     let progress = ProgressBar::new(
         conversations
             .iter()
@@ -243,6 +264,8 @@ async fn format_conversation_and_attachments(
 
                         match gitlab_client.upload_file(&file_path).await {
                             Ok(upload) => {
+                                upload_markdown_lines.push(upload.markdown.clone());
+
                                 if content_type.starts_with("image/")
                                     || content_type.starts_with("video/")
                                 {
@@ -276,13 +299,20 @@ async fn format_conversation_and_attachments(
 
     progress.finish_and_clear();
 
-    Ok(format!(
-        "<details>\n\
-<summary>Conversation Thread</summary>\n\n\
-{}\n\
-</details>",
-        markdown_lines.join("\n\n")
-    ))
+    let template_context = ConversationTemplateContext {
+        conversation: markdown_lines.join("\n\n"),
+        medias: if upload_markdown_lines.len() > 1 {
+            upload_markdown_lines.join("\n\n")
+        } else {
+            "no media files".to_string()
+        },
+    };
+
+    let mut tera = Tera::default();
+    let context = Context::from_serialize(&template_context)
+        .map_err(|e| anyhow::anyhow!("Failed to create template context: {}", e))?;
+    tera.render_str(CONVERSATION_TEMPLATE, &context)
+        .map_err(|e| anyhow::anyhow!("Failed to render template: {}", e))
 }
 
 fn format_conversation(conversation: &Conversation) -> String {
