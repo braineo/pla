@@ -301,10 +301,10 @@ async fn format_conversation_and_attachments(
 
     let template_context = ConversationTemplateContext {
         conversation: markdown_lines.join("\n\n"),
-        medias: if upload_markdown_lines.len() > 1 {
-            upload_markdown_lines.join("\n\n")
-        } else {
+        medias: if upload_markdown_lines.is_empty() {
             "no media files".to_string()
+        } else {
+            upload_markdown_lines.join("\n\n")
         },
     };
 
