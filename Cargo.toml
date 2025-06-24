@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["bump", "mm2glab", "pla"]
+members = ["bump", "lmerge", "mm2glab", "pla"]
 
 [workspace.metadata.release]
 tag-prefix = "{{crate_name}}-"
