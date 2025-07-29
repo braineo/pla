@@ -7,6 +7,7 @@ use anyhow::Result;
 use chrono::{Local, TimeZone};
 use dialoguer::Editor;
 use indicatif::{ProgressBar, ProgressStyle};
+use inquire::MultiSelect;
 use log::debug;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
@@ -96,10 +97,15 @@ pub async fn run(args: Args) -> Result<()> {
     let conversation_markdown =
         format_conversation_and_attachments(&conversation, &mm_client, &gitlab_client).await?;
 
-    let issue = GitLabIssueChangeset::new_issue(
+    let mut issue = GitLabIssueChangeset::new_issue(
         final_title.clone(),
         format!("{final_description}\n\n{conversation_markdown}"),
     );
+
+    // Select assignees
+    if let Some(assignee_ids) = select_assignees(&gitlab_client).await? {
+        issue.assignee_ids = Some(assignee_ids);
+    }
 
     let issue = gitlab_client.create_issue(&issue).await?;
     println!("Successfully created issue: {}", issue.web_url);
@@ -232,6 +238,39 @@ async fn analyze_conversation(
     };
 
     Ok((title, description, reason))
+}
+
+async fn select_assignees(gitlab_client: &impl GitLabApi) -> Result<Option<Vec<u64>>> {
+    let members = gitlab_client.search_project_members("").await?;
+
+    if members.is_empty() {
+        return Ok(None);
+    }
+
+    let choices: Vec<String> = members
+        .iter()
+        .map(|user| format!("{} ({})", user.name, user.username))
+        .collect();
+
+    let selected = MultiSelect::new("Select assignees:", choices)
+        .prompt()
+        .map_err(|e| anyhow::anyhow!("Failed to select assignees: {}", e))?;
+
+    if selected.is_empty() {
+        return Ok(None);
+    }
+
+    let selected_ids: Vec<u64> = selected
+        .iter()
+        .filter_map(|name| {
+            members
+                .iter()
+                .find(|user| format!("{} ({})", user.name, user.username) == *name)
+                .map(|user| user.id)
+        })
+        .collect();
+
+    Ok(Some(selected_ids))
 }
 
 async fn format_conversation_and_attachments(
