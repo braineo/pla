@@ -129,10 +129,8 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
                 let version_str = version_value
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Version in JSON is not a string"))?;
-                Version::parse(version_str).context(format!(
-                    "Failed to parse version '{}' as semver",
-                    version_str
-                ))
+                Version::parse(version_str)
+                    .context(format!("Failed to parse version '{version_str}' as semver",))
             } else {
                 bail!("Cannot find 'version' field in {}", file_path.display());
             }
@@ -150,8 +148,7 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
                             .as_str()
                             .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
                         return Version::parse(version_str).context(format!(
-                            "Failed to parse version '{}' as semver",
-                            version_str
+                            "Failed to parse version '{version_str}' as semver",
                         ));
                     }
                 }
@@ -165,10 +162,8 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
                     let version_str = version_value
                         .as_str()
                         .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
-                    Version::parse(version_str).context(format!(
-                        "Failed to parse version '{}' as semver",
-                        version_str
-                    ))
+                    Version::parse(version_str)
+                        .context(format!("Failed to parse version '{version_str}' as semver",))
                 } else {
                     bail!("Cannot find 'version' field in {}", file_path.display());
                 }
