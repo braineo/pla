@@ -4,4 +4,4 @@ format:
 
 .PHONY: lint
 lint:
-	cargo clippy --all-targets --all-features -- -D warnings
+	cargo clippy --all-targets --all-features --fix --allow-dirty -- -D warnings
