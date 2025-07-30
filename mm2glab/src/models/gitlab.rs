@@ -76,16 +76,8 @@ impl From<&GitLabIssue> for GitLabIssueChangeset {
         Self {
             title: Some(issue.title.clone()),
             description: Some(issue.description.clone()),
-            labels: if issue.labels.is_empty() {
-                None
-            } else {
-                Some(issue.labels.clone())
-            },
-            assignee_ids: if issue.assignee_ids.is_empty() {
-                None
-            } else {
-                Some(issue.assignee_ids.clone())
-            },
+            labels: (!issue.labels.is_empty()).then_some(issue.labels.clone()),
+            assignee_ids: (!issue.assignee_ids.is_empty()).then_some(issue.assignee_ids.clone()),
             extra_fields: HashMap::new(),
         }
     }
