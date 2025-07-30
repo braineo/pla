@@ -153,7 +153,7 @@ async fn get_conversation_from_thread(
                     let username = match (user.first_name, user.last_name) {
                         (Some(first), Some(last)) => {
                             if (!first.is_empty()) && (!last.is_empty()) {
-                                format!("{} {}", first, last)
+                                format!("{first} {last}")
                             } else {
                                 user.username
                             }
@@ -317,8 +317,7 @@ async fn format_conversation_and_attachments(
                             }
                             Err(e) => {
                                 eprintln!(
-                                    "Failed to upload file {}: {}, use mattermost link instead",
-                                    file_id, e
+                                    "Failed to upload file {file_id}: {e}, use mattermost link instead"
                                 );
                                 markdown_lines.push(format!(
                                     "- [{}]({})\n",
@@ -330,7 +329,7 @@ async fn format_conversation_and_attachments(
 
                         progress.inc(1);
                     }
-                    Err(e) => eprintln!("Failed to download file {}: {}", file_id, e),
+                    Err(e) => eprintln!("Failed to download file {file_id}: {e}"),
                 }
             }
         }

@@ -17,7 +17,7 @@ async fn main() {
         .init();
 
     if let Err(e) = services::run(args).await {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         process::exit(1);
     }
 }
