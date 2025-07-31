@@ -388,7 +388,7 @@ fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String
     match choice {
         "Proceed" => Ok((title.to_string(), description.to_string())),
         "Edit" => {
-            let edited_content = Editor::new("")
+            let edited_content = Editor::new("Edit the issue title and description:")
                 .with_file_extension(".md")
                 .with_predefined_text(&format!(
                     "Title: {}\n{}\n\n{}",
