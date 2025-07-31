@@ -5,9 +5,8 @@ use crate::{cli::Args, models::*};
 
 use anyhow::Result;
 use chrono::{Local, TimeZone};
-use dialoguer::Editor;
 use indicatif::{ProgressBar, ProgressStyle};
-use inquire::MultiSelect;
+use inquire::{Editor, MultiSelect, Select};
 use log::debug;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
@@ -94,18 +93,19 @@ pub async fn run(args: Args) -> Result<()> {
         (title, description)
     };
 
-    let conversation_markdown =
-        format_conversation_and_attachments(&conversation, &mm_client, &gitlab_client).await?;
-
-    let mut issue = GitLabIssueChangeset::new_issue(
-        final_title.clone(),
-        format!("{final_description}\n\n{conversation_markdown}"),
-    );
+    let mut issue = GitLabIssueChangeset::new();
 
     // Select assignees
     if let Some(assignee_ids) = select_assignees(&gitlab_client).await? {
-        issue.assignee_ids = Some(assignee_ids);
+        issue = issue.with_assignees(assignee_ids);
     }
+
+    let conversation_markdown =
+        format_conversation_and_attachments(&conversation, &mm_client, &gitlab_client).await?;
+
+    issue = issue
+        .with_title(final_title.clone())
+        .with_description(format!("{final_description}\n\n{conversation_markdown}"));
 
     let issue = gitlab_client.create_issue(&issue).await?;
     println!("Successfully created issue: {}", issue.web_url);
@@ -390,30 +390,31 @@ fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String
         ))
     );
 
-    loop {
-        let choice = dialoguer::Select::new()
-            .with_prompt("What would you like to do?")
-            .items(&["Proceed", "Edit", "Cancel"])
-            .default(0)
-            .interact()?;
+    let choice = Select::new(
+        "What would you like to do?",
+        vec!["Proceed", "Edit", "Cancel"],
+    )
+    .prompt()?;
 
-        match choice {
-            0 => return Ok((title.to_string(), description.to_string())),
-            1 => {
-                if let Ok(Some(edited_content)) = Editor::new().extension(".md").edit(&format!(
+    match choice {
+        "Proceed" => Ok((title.to_string(), description.to_string())),
+        "Edit" => {
+            let edited_content = Editor::new("")
+                .with_file_extension(".md")
+                .with_predefined_text(&format!(
                     "Title: {}\n{}\n\n{}",
                     title,
                     "=".repeat(80),
                     description
-                )) {
-                    let lines: Vec<&str> = edited_content.lines().collect();
-                    let new_title = lines[0].replace("Title: ", "").trim().to_string();
-                    let new_description = lines[2..].join("\n");
-                    return Ok((new_title, new_description));
-                }
-            }
-            2 => return Err(anyhow::anyhow!("Operation cancelled by user")),
-            _ => unreachable!(),
+                ))
+                .prompt()?;
+
+            let lines: Vec<&str> = edited_content.lines().collect();
+            let new_title = lines[0].replace("Title: ", "").trim().to_string();
+            let new_description = lines[2..].join("\n");
+            Ok((new_title, new_description))
         }
+        "Cancel" => Err(anyhow::anyhow!("Operation cancelled by user")),
+        _ => unreachable!(),
     }
 }

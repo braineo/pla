@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::process;
 
-mod api;
+pub mod api;
 mod cli;
 mod models;
 mod services;

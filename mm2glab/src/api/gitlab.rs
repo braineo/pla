@@ -111,30 +111,43 @@ impl GitLabApi for GitLabClient {
             "{}/api/v4/projects/{}/members/all",
             self.base_url, self.project_id
         );
+        let mut all_members: Vec<GitLabUser> = vec![];
+        let mut page = 1;
 
-        let response = self
-            .client
-            .get(&url)
-            .query(&[("query", search_term)])
-            .send()
-            .await?;
+        loop {
+            let response = self
+                .client
+                .get(&url)
+                .query(&[("query", search_term)])
+                .query(&[("page", page)])
+                .query(&[("per_page", 100)]) // Adjust per_page as needed
+                .send()
+                .await?;
 
-        let status = response.status();
+            let status = response.status();
 
-        if !status.is_success() {
-            let error_text = response.text().await?;
-            return Err(anyhow::anyhow!(
-                "cannot search user with status {}: {}",
-                status,
-                error_text
-            ));
-        };
+            if !status.is_success() {
+                let error_text = response.text().await?;
+                return Err(anyhow::anyhow!(
+                    "cannot search user with status {}: {}",
+                    status,
+                    error_text
+                ));
+            };
 
-        let members: Vec<GitLabUser> = response.json().await?;
+            let members: Vec<GitLabUser> = response.json().await?;
+            if members.is_empty() {
+                break;
+            } else {
+                all_members.extend(members);
+                page += 1;
+            }
+        }
 
-        Ok(members
+        Ok(all_members
             .into_iter()
-            .filter(|m| m.state == "active")
+            // active and access level is above developer
+            .filter(|m| m.state == "active" && m.access_level >= 30)
             .collect())
     }
 

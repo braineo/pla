@@ -94,8 +94,6 @@ pub struct GitLabUser {
     pub id: u64,
     pub username: String,
     pub name: String,
-    pub locked: bool,
     pub state: String,
-    pub avatar_url: String,
-    pub web_url: String,
+    pub access_level: u16,
 }
