@@ -5,7 +5,6 @@ use std::{path::Path, time::Duration};
 
 use crate::models::gitlab::{Issue, IssueChangeset, UploadResponse, User};
 
-
 #[async_trait]
 pub trait GitLabApi {
     async fn create_issue(&self, issue: &IssueChangeset) -> Result<Issue>;
