@@ -31,7 +31,7 @@ impl MattermostClient {
         let mut headers = header::HeaderMap::new();
         headers.insert(
             header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+            header::HeaderValue::from_str(&format!("Bearer {token}")).expect("Invalid Mattermost token"),
         );
 
         let client = Client::builder()
