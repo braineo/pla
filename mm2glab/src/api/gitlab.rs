@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use reqwest::{header, multipart, Client};
 use std::{path::Path, time::Duration};
 
-use crate::models::{Issue, IssueChangeset, UploadResponse, User};
+use crate::models::gitlab::{Issue, IssueChangeset, UploadResponse, User};
+
 
 #[async_trait]
 pub trait GitLabApi {

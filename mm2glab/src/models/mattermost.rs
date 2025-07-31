@@ -11,7 +11,7 @@ pub struct Conversation {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MattermostPost {
+pub struct Post {
     pub user_id: String,
     pub channel_id: String,
     pub message: String,
@@ -20,13 +20,13 @@ pub struct MattermostPost {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MattermostThread {
-    pub posts: HashMap<String, MattermostPost>,
+pub struct Thread {
+    pub posts: HashMap<String, Post>,
     pub order: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MattermostUser {
+pub struct User {
     pub username: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,

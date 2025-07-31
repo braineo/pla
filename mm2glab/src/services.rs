@@ -1,7 +1,9 @@
 use crate::api::gitlab::{GitLabApi, GitLabClient};
 use crate::api::mattermost::{MattermostApi, MattermostClient};
+use crate::cli::Args;
+use crate::models::gitlab::IssueChangeset;
+use crate::models::mattermost::{Conversation, Thread};
 use crate::settings::merge_settings_with_args;
-use crate::{cli::Args, models::*};
 
 use anyhow::Result;
 use chrono::{Local, TimeZone};
@@ -126,7 +128,7 @@ pub async fn run(args: Args) -> Result<()> {
 }
 
 async fn get_conversation_from_thread(
-    thread: &MattermostThread,
+    thread: &Thread,
     target_post_id: &str,
     mm_client: &impl MattermostApi,
 ) -> Result<Vec<Conversation>> {
