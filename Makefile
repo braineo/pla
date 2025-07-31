@@ -1,6 +1,6 @@
 .PHONY: format
 format:
-	cargo fmt --all -- --check
+	cargo fmt --all
 
 .PHONY: lint
 lint:
