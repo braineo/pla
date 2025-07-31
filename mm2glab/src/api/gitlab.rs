@@ -3,14 +3,17 @@ use async_trait::async_trait;
 use reqwest::{header, multipart, Client};
 use std::{path::Path, time::Duration};
 
-use crate::models::{GitLabIssue, GitLabUploadResponse};
+use crate::models::gitlab::{Issue, IssueChangeset, UploadResponse, User};
 
 #[async_trait]
 pub trait GitLabApi {
-    async fn create_issue(&self, issue: &GitLabIssue) -> Result<String>;
-    async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse>;
+    async fn create_issue(&self, issue: &IssueChangeset) -> Result<Issue>;
+    async fn update_issue(&self, issue_id: u64, changeset: &IssueChangeset) -> Result<Issue>;
+    async fn upload_file(&self, path: &Path) -> Result<UploadResponse>;
+    async fn search_project_members(&self, search_term: &str) -> Result<Vec<User>>;
 }
 
+#[derive(Clone)]
 pub struct GitLabClient {
     client: Client,
     base_url: String,
@@ -39,29 +42,91 @@ impl GitLabClient {
             project_id,
         }
     }
+
+    async fn handle_response<T>(&self, response: reqwest::Response) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!(
+                "GitLab API request failed with status {}: {}",
+                status,
+                error_text
+            ));
+        }
+        response.json().await.map_err(Into::into)
+    }
 }
 
 #[async_trait]
 impl GitLabApi for GitLabClient {
-    async fn create_issue(&self, issue: &GitLabIssue) -> Result<String> {
+    async fn create_issue(&self, issue: &IssueChangeset) -> Result<Issue> {
+        if issue.title.is_none() || issue.description.is_none() {
+            return Err(anyhow::anyhow!(
+                "Title and description are required for new issues"
+            ));
+        }
+
         let url = format!(
             "{}/api/v4/projects/{}/issues",
             self.base_url, self.project_id
         );
 
-        let response: serde_json::Value = self
-            .client
-            .post(&url)
-            .json(&issue)
-            .send()
-            .await?
-            .json()
-            .await?;
+        let response = self.client.post(&url).json(&issue).send().await?;
+        let issue: Issue = self.handle_response(response).await?;
 
-        Ok(response["web_url"].as_str().unwrap_or_default().to_string())
+        Ok(issue)
     }
 
-    async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse> {
+    async fn update_issue(&self, issue_id: u64, changeset: &IssueChangeset) -> Result<Issue> {
+        let url = format!(
+            "{}/api/v4/projects/{}/issues/{}",
+            self.base_url, self.project_id, issue_id
+        );
+
+        let response = self.client.put(&url).json(&changeset).send().await?;
+        let issue: Issue = self.handle_response(response).await?;
+
+        Ok(issue)
+    }
+
+    async fn search_project_members(&self, search_term: &str) -> Result<Vec<User>> {
+        let url = format!(
+            "{}/api/v4/projects/{}/members/all",
+            self.base_url, self.project_id
+        );
+        let mut all_members: Vec<User> = vec![];
+        let mut page = 1;
+
+        loop {
+            let response = self
+                .client
+                .get(&url)
+                .query(&[("query", search_term)])
+                .query(&[("page", page)])
+                .query(&[("per_page", 100)]) // Adjust per_page as needed
+                .send()
+                .await?;
+            let members: Vec<User> = self.handle_response(response).await?;
+
+            if members.is_empty() {
+                break;
+            } else {
+                all_members.extend(members);
+                page += 1;
+            }
+        }
+
+        Ok(all_members
+            .into_iter()
+            // active and access level is developer or above
+            .filter(|m| m.state == "active" && m.access_level >= 30)
+            .collect())
+    }
+
+    async fn upload_file(&self, path: &Path) -> Result<UploadResponse> {
         let url = format!(
             "{}/api/v4/projects/{}/uploads",
             self.base_url, self.project_id
@@ -79,21 +144,7 @@ impl GitLabApi for GitLabClient {
         let form = multipart::Form::new().part("file", file_part);
 
         let response = self.client.post(&url).multipart(form).send().await?;
-
-        // Check the status code before trying to parse JSON
-        let status = response.status();
-
-        if !status.is_success() {
-            let error_text = response.text().await?;
-            return Err(anyhow::anyhow!(
-                "GitLab upload failed with status {}: {}",
-                status,
-                error_text
-            ));
-        }
-
-        // Only try to parse as JSON if we got a success status
-        let gitlab_response: GitLabUploadResponse = response.json().await?;
+        let gitlab_response: UploadResponse = self.handle_response(response).await?;
 
         Ok(gitlab_response)
     }

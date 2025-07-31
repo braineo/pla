@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::process;
 
-mod api;
+pub mod api;
 mod cli;
 mod models;
 mod services;
@@ -17,7 +17,7 @@ async fn main() {
         .init();
 
     if let Err(e) = services::run(args).await {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         process::exit(1);
     }
 }

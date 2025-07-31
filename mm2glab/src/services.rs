@@ -1,12 +1,14 @@
 use crate::api::gitlab::{GitLabApi, GitLabClient};
 use crate::api::mattermost::{MattermostApi, MattermostClient};
+use crate::cli::Args;
+use crate::models::gitlab::IssueChangeset;
+use crate::models::mattermost::{Conversation, Thread};
 use crate::settings::merge_settings_with_args;
-use crate::{cli::Args, models::*};
 
 use anyhow::Result;
 use chrono::{Local, TimeZone};
-use dialoguer::Editor;
 use indicatif::{ProgressBar, ProgressStyle};
+use inquire::{Editor, MultiSelect, Select};
 use log::debug;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
@@ -72,7 +74,7 @@ pub async fn run(args: Args) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
-            .template("{spinner} {msg}")
+            .template("{spinner} {msg} -- {elapsed}")
             .unwrap(),
     );
     spinner.set_message("Generating title and description from LLM...");
@@ -93,22 +95,28 @@ pub async fn run(args: Args) -> Result<()> {
         (title, description)
     };
 
+    let mut issue = IssueChangeset::new();
+
+    // Select assignees
+    if let Some(assignee_ids) = select_assignees(&gitlab_client).await? {
+        issue = issue.with_assignees(assignee_ids);
+    }
+
     let conversation_markdown =
         format_conversation_and_attachments(&conversation, &mm_client, &gitlab_client).await?;
 
-    let issue = GitLabIssue {
-        title: final_title.clone(),
-        description: format!("{final_description}\n\n{conversation_markdown}"),
-    };
+    issue = issue
+        .with_title(final_title.clone())
+        .with_description(format!("{final_description}\n\n{conversation_markdown}"));
 
-    let issue_url = gitlab_client.create_issue(&issue).await?;
-    println!("Successfully created issue: {}", issue_url);
+    let issue = gitlab_client.create_issue(&issue).await?;
+    println!("Successfully created issue: {}", issue.web_url);
 
     if !args.no_reply {
         let post = mm_client.get_post(&post_id).await?;
         let reply = format!(
             ":gitlab: This conversation is now tracked in GitLab Issue: [{}]({})",
-            final_title, issue_url
+            final_title, issue.web_url
         );
         mm_client
             .create_post(&post.channel_id, &reply, Some(&post_id))
@@ -120,7 +128,7 @@ pub async fn run(args: Args) -> Result<()> {
 }
 
 async fn get_conversation_from_thread(
-    thread: &MattermostThread,
+    thread: &Thread,
     target_post_id: &str,
     mm_client: &impl MattermostApi,
 ) -> Result<Vec<Conversation>> {
@@ -147,7 +155,7 @@ async fn get_conversation_from_thread(
                     let username = match (user.first_name, user.last_name) {
                         (Some(first), Some(last)) => {
                             if (!first.is_empty()) && (!last.is_empty()) {
-                                format!("{} {}", first, last)
+                                format!("{first} {last}")
                             } else {
                                 user.username
                             }
@@ -234,6 +242,26 @@ async fn analyze_conversation(
     Ok((title, description, reason))
 }
 
+async fn select_assignees(gitlab_client: &impl GitLabApi) -> Result<Option<Vec<u64>>> {
+    let members = gitlab_client.search_project_members("").await?;
+
+    if members.is_empty() {
+        return Ok(None);
+    }
+
+    let selected = MultiSelect::new("Select assignees:", members)
+        .prompt()
+        .map_err(|e| anyhow::anyhow!("Failed to select assignees: {}", e))?;
+
+    if selected.is_empty() {
+        return Ok(None);
+    }
+
+    let selected_ids: Vec<u64> = selected.iter().map(|user| user.id).collect();
+
+    Ok(Some(selected_ids))
+}
+
 async fn format_conversation_and_attachments(
     conversations: &[Conversation],
     mm_client: &impl MattermostApi,
@@ -278,8 +306,7 @@ async fn format_conversation_and_attachments(
                             }
                             Err(e) => {
                                 eprintln!(
-                                    "Failed to upload file {}: {}, use mattermost link instead",
-                                    file_id, e
+                                    "Failed to upload file {file_id}: {e}, use mattermost link instead"
                                 );
                                 markdown_lines.push(format!(
                                     "- [{}]({})\n",
@@ -291,7 +318,7 @@ async fn format_conversation_and_attachments(
 
                         progress.inc(1);
                     }
-                    Err(e) => eprintln!("Failed to download file {}: {}", file_id, e),
+                    Err(e) => eprintln!("Failed to download file {file_id}: {e}"),
                 }
             }
         }
@@ -352,30 +379,31 @@ fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String
         ))
     );
 
-    loop {
-        let choice = dialoguer::Select::new()
-            .with_prompt("What would you like to do?")
-            .items(&["Proceed", "Edit", "Cancel"])
-            .default(0)
-            .interact()?;
+    let choice = Select::new(
+        "What would you like to do?",
+        vec!["Proceed", "Edit", "Cancel"],
+    )
+    .prompt()?;
 
-        match choice {
-            0 => return Ok((title.to_string(), description.to_string())),
-            1 => {
-                if let Ok(Some(edited_content)) = Editor::new().extension(".md").edit(&format!(
+    match choice {
+        "Proceed" => Ok((title.to_string(), description.to_string())),
+        "Edit" => {
+            let edited_content = Editor::new("Edit the issue title and description:")
+                .with_file_extension(".md")
+                .with_predefined_text(&format!(
                     "Title: {}\n{}\n\n{}",
                     title,
                     "=".repeat(80),
                     description
-                )) {
-                    let lines: Vec<&str> = edited_content.lines().collect();
-                    let new_title = lines[0].replace("Title: ", "").trim().to_string();
-                    let new_description = lines[2..].join("\n");
-                    return Ok((new_title, new_description));
-                }
-            }
-            2 => return Err(anyhow::anyhow!("Operation cancelled by user")),
-            _ => unreachable!(),
+                ))
+                .prompt()?;
+
+            let lines: Vec<&str> = edited_content.lines().collect();
+            let new_title = lines[0].replace("Title: ", "").trim().to_string();
+            let new_description = lines[2..].join("\n");
+            Ok((new_title, new_description))
         }
+        "Cancel" => Err(anyhow::anyhow!("Operation cancelled by user")),
+        _ => unreachable!(),
     }
 }
