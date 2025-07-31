@@ -3,18 +3,14 @@ use async_trait::async_trait;
 use reqwest::{header, multipart, Client};
 use std::{path::Path, time::Duration};
 
-use crate::models::{GitLabIssue, GitLabIssueChangeset, GitLabUploadResponse, GitLabUser};
+use crate::models::{Issue, IssueChangeset, UploadResponse, User};
 
 #[async_trait]
 pub trait GitLabApi {
-    async fn create_issue(&self, issue: &GitLabIssueChangeset) -> Result<GitLabIssue>;
-    async fn update_issue(
-        &self,
-        issue_id: u64,
-        changeset: &GitLabIssueChangeset,
-    ) -> Result<GitLabIssue>;
-    async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse>;
-    async fn search_project_members(&self, search_term: &str) -> Result<Vec<GitLabUser>>;
+    async fn create_issue(&self, issue: &IssueChangeset) -> Result<Issue>;
+    async fn update_issue(&self, issue_id: u64, changeset: &IssueChangeset) -> Result<Issue>;
+    async fn upload_file(&self, path: &Path) -> Result<UploadResponse>;
+    async fn search_project_members(&self, search_term: &str) -> Result<Vec<User>>;
 }
 
 #[derive(Clone)]
@@ -50,7 +46,7 @@ impl GitLabClient {
 
 #[async_trait]
 impl GitLabApi for GitLabClient {
-    async fn create_issue(&self, issue: &GitLabIssueChangeset) -> Result<GitLabIssue> {
+    async fn create_issue(&self, issue: &IssueChangeset) -> Result<Issue> {
         if issue.title.is_none() || issue.description.is_none() {
             return Err(anyhow::anyhow!(
                 "Title and description are required for new issues"
@@ -75,16 +71,12 @@ impl GitLabApi for GitLabClient {
             ));
         };
 
-        let issue: GitLabIssue = response.json().await?;
+        let issue: Issue = response.json().await?;
 
         Ok(issue)
     }
 
-    async fn update_issue(
-        &self,
-        issue_id: u64,
-        changeset: &GitLabIssueChangeset,
-    ) -> Result<GitLabIssue> {
+    async fn update_issue(&self, issue_id: u64, changeset: &IssueChangeset) -> Result<Issue> {
         let url = format!(
             "{}/api/v4/projects/{}/issues/{}",
             self.base_url, self.project_id, issue_id
@@ -101,17 +93,17 @@ impl GitLabApi for GitLabClient {
             ));
         }
 
-        let issue: GitLabIssue = response.json().await?;
+        let issue: Issue = response.json().await?;
 
         Ok(issue)
     }
 
-    async fn search_project_members(&self, search_term: &str) -> Result<Vec<GitLabUser>> {
+    async fn search_project_members(&self, search_term: &str) -> Result<Vec<User>> {
         let url = format!(
             "{}/api/v4/projects/{}/members/all",
             self.base_url, self.project_id
         );
-        let mut all_members: Vec<GitLabUser> = vec![];
+        let mut all_members: Vec<User> = vec![];
         let mut page = 1;
 
         loop {
@@ -135,7 +127,7 @@ impl GitLabApi for GitLabClient {
                 ));
             };
 
-            let members: Vec<GitLabUser> = response.json().await?;
+            let members: Vec<User> = response.json().await?;
             if members.is_empty() {
                 break;
             } else {
@@ -151,7 +143,7 @@ impl GitLabApi for GitLabClient {
             .collect())
     }
 
-    async fn upload_file(&self, path: &Path) -> Result<GitLabUploadResponse> {
+    async fn upload_file(&self, path: &Path) -> Result<UploadResponse> {
         let url = format!(
             "{}/api/v4/projects/{}/uploads",
             self.base_url, self.project_id
@@ -183,7 +175,7 @@ impl GitLabApi for GitLabClient {
         }
 
         // Only try to parse as JSON if we got a success status
-        let gitlab_response: GitLabUploadResponse = response.json().await?;
+        let gitlab_response: UploadResponse = response.json().await?;
 
         Ok(gitlab_response)
     }

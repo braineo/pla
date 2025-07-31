@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct GitLabIssue {
+pub struct Issue {
     #[serde(default)]
     pub id: u64,
     #[serde(default)]
@@ -18,7 +18,7 @@ pub struct GitLabIssue {
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GitLabIssueChangeset {
+pub struct IssueChangeset {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,7 +32,7 @@ pub struct GitLabIssueChangeset {
     pub extra_fields: HashMap<String, serde_json::Value>,
 }
 
-impl GitLabIssueChangeset {
+impl IssueChangeset {
     pub fn new() -> Self {
         Self::default()
     }
@@ -71,8 +71,8 @@ impl GitLabIssueChangeset {
     }
 }
 
-impl From<&GitLabIssue> for GitLabIssueChangeset {
-    fn from(issue: &GitLabIssue) -> Self {
+impl From<&Issue> for IssueChangeset {
+    fn from(issue: &Issue) -> Self {
         Self {
             title: Some(issue.title.clone()),
             description: Some(issue.description.clone()),
@@ -84,13 +84,13 @@ impl From<&GitLabIssue> for GitLabIssueChangeset {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GitLabUploadResponse {
+pub struct UploadResponse {
     pub url: String,
     pub markdown: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct GitLabUser {
+pub struct User {
     pub id: u64,
     pub username: String,
     pub name: String,

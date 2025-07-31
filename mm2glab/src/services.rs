@@ -93,7 +93,7 @@ pub async fn run(args: Args) -> Result<()> {
         (title, description)
     };
 
-    let mut issue = GitLabIssueChangeset::new();
+    let mut issue = IssueChangeset::new();
 
     // Select assignees
     if let Some(assignee_ids) = select_assignees(&gitlab_client).await? {
