@@ -138,7 +138,7 @@ impl GitLabApi for GitLabClient {
 
         Ok(all_members
             .into_iter()
-            // active and access level is above developer
+            // active and access level is developer or above
             .filter(|m| m.state == "active" && m.access_level >= 30)
             .collect())
     }

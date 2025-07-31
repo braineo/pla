@@ -249,12 +249,7 @@ async fn select_assignees(gitlab_client: &impl GitLabApi) -> Result<Option<Vec<u
         return Ok(None);
     }
 
-    let choices: Vec<String> = members
-        .iter()
-        .map(|user| format!("{} ({})", user.name, user.username))
-        .collect();
-
-    let selected = MultiSelect::new("Select assignees:", choices)
+    let selected = MultiSelect::new("Select assignees:", members)
         .prompt()
         .map_err(|e| anyhow::anyhow!("Failed to select assignees: {}", e))?;
 
@@ -262,15 +257,7 @@ async fn select_assignees(gitlab_client: &impl GitLabApi) -> Result<Option<Vec<u
         return Ok(None);
     }
 
-    let selected_ids: Vec<u64> = selected
-        .iter()
-        .filter_map(|name| {
-            members
-                .iter()
-                .find(|user| format!("{} ({})", user.name, user.username) == *name)
-                .map(|user| user.id)
-        })
-        .collect();
+    let selected_ids: Vec<u64> = selected.iter().map(|user| user.id).collect();
 
     Ok(Some(selected_ids))
 }

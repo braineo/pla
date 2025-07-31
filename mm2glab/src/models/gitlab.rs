@@ -97,3 +97,9 @@ pub struct User {
     pub state: String,
     pub access_level: u16,
 }
+
+impl std::fmt::Display for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}, ({})", self.name, self.username)
+    }
+}
