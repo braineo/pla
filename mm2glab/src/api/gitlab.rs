@@ -42,6 +42,22 @@ impl GitLabClient {
             project_id,
         }
     }
+
+    async fn handle_response<T>(&self, response: reqwest::Response) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow::anyhow!(
+                "GitLab API request failed with status {}: {}",
+                status,
+                error_text
+            ));
+        }
+        response.json().await.map_err(Into::into)
+    }
 }
 
 #[async_trait]
@@ -59,19 +75,7 @@ impl GitLabApi for GitLabClient {
         );
 
         let response = self.client.post(&url).json(&issue).send().await?;
-
-        let status = response.status();
-
-        if !status.is_success() {
-            let error_text = response.text().await?;
-            return Err(anyhow::anyhow!(
-                "cannot create issue with status {}: {}",
-                status,
-                error_text
-            ));
-        };
-
-        let issue: Issue = response.json().await?;
+        let issue: Issue = self.handle_response(response).await?;
 
         Ok(issue)
     }
@@ -83,17 +87,7 @@ impl GitLabApi for GitLabClient {
         );
 
         let response = self.client.put(&url).json(&changeset).send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            let error_text = response.text().await?;
-            return Err(anyhow::anyhow!(
-                "Failed to update issue: {} - {}",
-                status,
-                error_text
-            ));
-        }
-
-        let issue: Issue = response.json().await?;
+        let issue: Issue = self.handle_response(response).await?;
 
         Ok(issue)
     }
@@ -115,19 +109,8 @@ impl GitLabApi for GitLabClient {
                 .query(&[("per_page", 100)]) // Adjust per_page as needed
                 .send()
                 .await?;
+            let members: Vec<User> = self.handle_response(response).await?;
 
-            let status = response.status();
-
-            if !status.is_success() {
-                let error_text = response.text().await?;
-                return Err(anyhow::anyhow!(
-                    "cannot search user with status {}: {}",
-                    status,
-                    error_text
-                ));
-            };
-
-            let members: Vec<User> = response.json().await?;
             if members.is_empty() {
                 break;
             } else {
@@ -161,21 +144,7 @@ impl GitLabApi for GitLabClient {
         let form = multipart::Form::new().part("file", file_part);
 
         let response = self.client.post(&url).multipart(form).send().await?;
-
-        // Check the status code before trying to parse JSON
-        let status = response.status();
-
-        if !status.is_success() {
-            let error_text = response.text().await?;
-            return Err(anyhow::anyhow!(
-                "GitLab upload failed with status {}: {}",
-                status,
-                error_text
-            ));
-        }
-
-        // Only try to parse as JSON if we got a success status
-        let gitlab_response: UploadResponse = response.json().await?;
+        let gitlab_response: UploadResponse = self.handle_response(response).await?;
 
         Ok(gitlab_response)
     }
