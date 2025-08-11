@@ -69,13 +69,7 @@ fn generate_default_bump_files(version_file: &str, project_path: &Path) -> Vec<S
                 bump_files.push(package_lock.to_string());
             }
         }
-        "Cargo.toml" => {
-            // For Rust projects, include Cargo.lock
-            let cargo_lock = "Cargo.lock";
-            if project_path.join(cargo_lock).exists() {
-                bump_files.push(cargo_lock.to_string());
-            }
-        }
+        "Cargo.toml" => {}
         // Add more cases as needed for other project types
         _ => {
             // For unknown version file types, just include the version file itself
