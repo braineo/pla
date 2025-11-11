@@ -1,12 +1,12 @@
 use crate::repo::Repo;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use bump_version::{BumpType, BumpVersion};
-use clap::{value_parser, Arg, ArgAction, Command, ValueEnum};
-use clap_complete::{generate, Generator, Shell};
+use clap::{Arg, ArgAction, Command, ValueEnum, value_parser};
+use clap_complete::{Generator, Shell, generate};
 use cli::prompt_version_select;
 
 use log::{debug, info};
-use owo_colors::{colors::xterm, OwoColorize};
+use owo_colors::{OwoColorize, colors::xterm};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use settings::init_settings;
@@ -87,8 +87,8 @@ prerelease version will be -IDENTIFIER.0 or -0",
         )
 }
 
-fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
-    generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
+fn print_completions<G: Generator>(g: G, cmd: &mut Command) {
+    generate(g, cmd, cmd.get_name().to_string(), &mut io::stdout());
 }
 
 #[derive(Debug)]

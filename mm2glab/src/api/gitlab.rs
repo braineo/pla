@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use reqwest::{header, multipart, Client};
+use reqwest::{Client, header, multipart};
 use std::{path::Path, time::Duration};
 
 use crate::models::gitlab::{Issue, IssueChangeset, UploadResponse, User};
