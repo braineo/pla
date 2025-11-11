@@ -12,6 +12,7 @@ use std::process::Stdio;
 
 use crate::cli::Args;
 use crate::settings;
+use crate::settings::write_settings;
 
 #[derive(Debug, Clone)]
 struct Repository {
@@ -110,7 +111,7 @@ fn run_ls_command(root: &Path, command: &str, pattern: Option<&str>) -> Vec<Repo
 
 fn select_repositories(
     repos: Vec<Repository>,
-    default_selection: &Vec<String>,
+    default_selection: &[String],
 ) -> Result<Vec<Repository>> {
     if repos.is_empty() {
         anyhow::bail!("No repositories found!");
@@ -166,7 +167,7 @@ fn batch_run(repos: &[Repository], command: &str) -> Result<HashMap<String, bool
 }
 
 pub async fn run(args: Args) -> Result<()> {
-    let settings = settings::load_settings().context("Failed to load settings")?;
+    let mut settings = settings::load_settings().context("Failed to load settings")?;
 
     let repos = if let Some(list_command) = args.list_command {
         run_ls_command(&args.dir, &list_command, args.match_regexp.as_deref())
@@ -195,6 +196,13 @@ pub async fn run(args: Args) -> Result<()> {
         return Ok(());
     }
 
+    settings.last_selected_repos = selected_repos
+        .iter()
+        .map(|repo| repo.name.clone())
+        .collect();
+
+    write_settings(&settings)?;
+
     println!(
         "\n{} Selected {} repositories",
         "✓".bright_green(),
@@ -219,13 +227,18 @@ pub async fn run(args: Args) -> Result<()> {
 
     let results = batch_run(&selected_repos, &command)?;
 
+    let mut failed_repos = Vec::new();
     results.into_iter().for_each(|(name, success)| {
         if success {
             println!("{} {},", "✓".bright_green(), name.as_str().bright_cyan(),);
         } else {
+            failed_repos.push(name.clone());
             println!("{} {},", "✗".bright_red(), name.as_str().bright_cyan(),);
         }
     });
+
+    settings.last_failed_repos = failed_repos;
+    write_settings(&settings)?;
 
     Ok(())
 }

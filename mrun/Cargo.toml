@@ -16,3 +16,4 @@ config = { version = "0.15.11", features = ["toml"] }
 inquire = { version = "0.7.5", features = ["editor"] }
 owo-colors = "4"
 regex = "1.10"
+toml = "0.9.8"

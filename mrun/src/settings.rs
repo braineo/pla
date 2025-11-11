@@ -1,9 +1,11 @@
-use std::{env, path::PathBuf};
-
+use anyhow::Result;
 use config::{Config, File};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::Write;
+use std::{env, fs::OpenOptions, path::PathBuf};
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub last_selected_repos: Vec<String>,
     pub last_failed_repos: Vec<String>,
@@ -52,4 +54,23 @@ pub fn load_settings() -> anyhow::Result<Settings> {
     }
 
     Ok(settings)
+}
+
+pub fn write_settings(settings: &Settings) -> Result<()> {
+    if let Some(xdg_config) = get_xdg_config_path() {
+        let config_folder = xdg_config.join(CONFIG_FILE_NAME);
+        fs::create_dir_all(&config_folder)?;
+
+        let config_path = config_folder.join("config.toml");
+        let toml_string = toml::to_string(settings)?;
+
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(config_path)?;
+
+        file.write_all(toml_string.as_bytes())?
+    }
+
+    Ok(())
 }
