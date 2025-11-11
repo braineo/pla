@@ -4,3 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+indicatif = "0.17.11"
+env_logger = "0.11.6"
+log = "0.4.26"
+config = { version = "0.15.11", features = ["toml"] }
+inquire = { version = "0.7.5", features = ["editor"] }
+owo-colors = "4"
+regex = "1.10"

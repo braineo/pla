@@ -1661,6 +1661,20 @@ dependencies = [
 [[package]]
 name = "mrun"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "config 0.15.11",
+ "env_logger 0.11.6",
+ "indicatif",
+ "inquire",
+ "log",
+ "owo-colors",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "native-tls"
