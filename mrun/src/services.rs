@@ -1,13 +1,16 @@
 use anyhow::{Context, Result};
+use inquire::Confirm;
+use inquire::MultiSelect;
+use owo_colors::OwoColorize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-
-use owo_colors::OwoColorize;
-use owo_colors::colors::*;
+use std::process::Output;
 
 use crate::cli::Args;
+use crate::settings;
 
 #[derive(Debug, Clone)]
 struct Repository {
@@ -16,14 +19,6 @@ struct Repository {
 }
 
 impl Repository {
-    fn display_name(&self) -> String {
-        format!("{} ({})", self.name.bright_cyan(), self.path.display())
-    }
-
-    fn is_git_repo(&self) -> bool {
-        self.path.join(".git").exists()
-    }
-
     fn get_status(&self) -> Result<String> {
         let output = Command::new("git")
             .args(["status", "--short"])
@@ -33,6 +28,33 @@ impl Repository {
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
+
+    pub fn run_command(&self, command: &str) -> Result<Output> {
+        Command::new("bash")
+            .arg("-c")
+            .arg(command)
+            .current_dir(&self.path)
+            .output()
+            .context("Failed to execute command in {self.name}")
+    }
+}
+
+impl std::fmt::Display for Repository {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}, ({}) [{}]",
+            self.name.bright_cyan(),
+            self.path.display(),
+            self.get_status()
+                .map(|status| if status.trim().is_empty() {
+                    ""
+                } else {
+                    "modified"
+                })
+                .unwrap_or("")
+        )
+    }
 }
 
 fn walk_repositories(root: &Path, pattern: Option<&str>) -> Vec<Repository> {
@@ -41,28 +63,142 @@ fn walk_repositories(root: &Path, pattern: Option<&str>) -> Vec<Repository> {
     let pattern_reg = pattern.map(|p| regex::Regex::new(p).expect("Invalid regex pattern"));
 
     if let Ok(paths) = fs::read_dir(root) {
-        paths
-            .filter_map(|p| {
-                let entry = p.ok()?;
-                let path = entry.path();
-                let name = path.file_name()?.to_str()?.to_string();
+        repos.extend(paths.filter_map(|p| -> Option<Repository> {
+            let entry = p.ok()?;
+            let path = entry.path();
+            let name = path.file_name()?.to_str()?.to_string();
 
-                if !(path.is_dir() && path.join(".git").exists()) {
-                    return None;
-                }
+            if !(path.is_dir() && path.join(".git").exists()) {
+                return None;
+            }
 
-                if reg.is_match(&name) {
-                    return Some(Repository { name, path });
-                } else {
-                    return None;
-                }
-            })
-            .collect_into(&mut repos);
+            if let Some(reg) = &pattern_reg
+                && !reg.is_match(&name)
+            {
+                return None;
+            }
+
+            Some(Repository { name, path })
+        }));
     }
 
     repos
 }
 
+fn select_repositories(
+    repos: Vec<Repository>,
+    default_selection: &Vec<String>,
+) -> Result<Vec<Repository>> {
+    if repos.is_empty() {
+        anyhow::bail!("No repositories found!");
+    }
+
+    println!("\n{}", "Found repositories:".bright_green().bold());
+
+    let default = default_selection
+        .iter()
+        .filter_map(|name| repos.iter().position(|repo| &repo.name == name))
+        .collect::<Vec<_>>();
+
+    let selected = MultiSelect::new(
+        "Select repositories to process (Space to select, Enter to confirm):",
+        repos,
+    )
+    .with_default(&default)
+    .prompt()
+    .context("Failed to get repository selection")?;
+
+    Ok(selected)
+}
+
+fn get_command(
+    command_string: Option<String>,
+    command_file_path: Option<PathBuf>,
+) -> Result<String> {
+    if let Some(cmd) = command_string {
+        return Ok(cmd);
+    }
+
+    if let Some(path) = command_file_path {
+        return Ok(fs::read_to_string(path)?);
+    }
+
+    let command = inquire::Text::new("Enter command to execute in each repository:")
+        .with_placeholder("e.g., git pull && npm install")
+        .with_help_message("This will be executed as: bash -c 'your command'")
+        .prompt()
+        .context("Failed to get command")?;
+
+    Ok(command)
+}
+
+fn batch_run(repos: &[Repository], command: &str) -> Result<HashMap<String, bool>> {
+    let mut results = HashMap::new();
+
+    for repo in repos {
+        let output = repo.run_command(command)?;
+        results.insert(repo.name.clone(), output.status.success());
+    }
+    Ok(results)
+}
+
 pub async fn run(args: Args) -> Result<()> {
+    let settings = settings::load_settings().context("Failed to load settings")?;
+
+    let repos = walk_repositories(&args.dir, args.match_regexp.as_deref());
+
+    if repos.is_empty() {
+        println!("{} No repositories found!", "⚠".yellow());
+        return Ok(());
+    }
+
+    let selected_repos = select_repositories(
+        repos,
+        if let Some(resume_failed) = args.failed
+            && resume_failed
+        {
+            &settings.last_failed_repos
+        } else {
+            &settings.last_selected_repos
+        },
+    )?;
+
+    if selected_repos.is_empty() {
+        println!("\n{} No repositories selected. Exiting.", "ℹ".blue());
+        return Ok(());
+    }
+
+    println!(
+        "\n{} Selected {} repositories",
+        "✓".bright_green(),
+        selected_repos.len().to_string().bright_cyan()
+    );
+
+    let command = get_command(args.command, args.command_file)?;
+
+    println!("\n{}", "Command to execute:".bright_yellow());
+    println!("  {}\n", command.bright_white());
+
+    // Confirm execution
+    let confirm = Confirm::new("Proceed with batch execution?")
+        .with_default(false)
+        .prompt()
+        .context("Failed to get confirmation")?;
+
+    if !confirm {
+        println!("\n{} Execution cancelled.", "✗".yellow());
+        return Ok(());
+    }
+
+    let results = batch_run(&selected_repos, &command)?;
+
+    results.into_iter().for_each(|(name, success)| {
+        if success {
+            println!("{} {},", "✓".bright_green(), name.as_str().bright_cyan(),);
+        } else {
+            println!("{} {},", "✗".bright_red(), name.as_str().bright_cyan(),);
+        }
+    });
+
     Ok(())
 }

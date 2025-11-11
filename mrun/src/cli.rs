@@ -12,20 +12,24 @@ pub struct Args {
 
     /// Command to execute in each repository (e.g., "git pull && npm install")
     #[arg(short, long)]
-    command: Option<String>,
+    pub command: Option<String>,
 
     /// Command to execute in each repository
     #[arg(short, long)]
-    command_file: PathBuf,
+    pub command_file: Option<PathBuf>,
 
     /// Pattern to match repository names (e.g., "app.+")
     #[arg(short, long)]
-    match_regexp: Option<String>,
+    pub match_regexp: Option<String>,
 
     /// Command to list directories (e.g., "find . -type f  -maxdepth 2 -name "package.json" -printf '%P\n' | xargs -I {} dirname {}")
     /// If specifiied it will replace "ls"
     #[arg(short, long)]
-    list_command: Option<String>,
+    pub list_command: Option<String>,
+
+    /// Select last failed repositories by default
+    #[arg(short,long)]
+    pub failed: Option<bool>,
 
     /// Log verbosity
     #[arg(short, long, value_name = "LEVEL", default_value_t = LogLevel::Info)]
