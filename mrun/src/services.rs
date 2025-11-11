@@ -8,6 +8,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
+use std::process::Stdio;
 
 use crate::cli::Args;
 use crate::settings;
@@ -34,6 +35,7 @@ impl Repository {
             .arg("-c")
             .arg(command)
             .current_dir(&self.path)
+            .stdout(Stdio::inherit())
             .output()
             .context("Failed to execute command in {self.name}")
     }
@@ -41,19 +43,7 @@ impl Repository {
 
 impl std::fmt::Display for Repository {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}, ({}) [{}]",
-            self.name.bright_cyan(),
-            self.path.display(),
-            self.get_status()
-                .map(|status| if status.trim().is_empty() {
-                    ""
-                } else {
-                    "modified"
-                })
-                .unwrap_or("")
-        )
+        write!(f, "{}, ({})", self.name.bright_cyan(), self.path.display(),)
     }
 }
 
@@ -80,6 +70,40 @@ fn walk_repositories(root: &Path, pattern: Option<&str>) -> Vec<Repository> {
 
             Some(Repository { name, path })
         }));
+    }
+
+    repos
+}
+
+fn run_ls_command(root: &Path, command: &str, pattern: Option<&str>) -> Vec<Repository> {
+    let mut repos = Vec::new();
+
+    let pattern_reg = pattern.map(|p| regex::Regex::new(p).expect("Invalid regex pattern"));
+
+    let command_result = Command::new("bash")
+        .arg("-c")
+        .arg(command)
+        .current_dir(root)
+        .output()
+        .context("Failed to execute command in {self.name}");
+
+    if let Ok(output) = command_result {
+        repos.extend(
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .into_iter()
+                .filter_map(|name| {
+                    if let Some(reg) = &pattern_reg
+                        && !reg.is_match(&name)
+                    {
+                        return None;
+                    }
+                    Some(Repository {
+                        name: name.to_string(),
+                        path: root.join(name),
+                    })
+                }),
+        );
     }
 
     repos
@@ -145,7 +169,11 @@ fn batch_run(repos: &[Repository], command: &str) -> Result<HashMap<String, bool
 pub async fn run(args: Args) -> Result<()> {
     let settings = settings::load_settings().context("Failed to load settings")?;
 
-    let repos = walk_repositories(&args.dir, args.match_regexp.as_deref());
+    let repos = if let Some(list_command) = args.list_command {
+        run_ls_command(&args.dir, &list_command, args.match_regexp.as_deref())
+    } else {
+        walk_repositories(&args.dir, args.match_regexp.as_deref())
+    };
 
     if repos.is_empty() {
         println!("{} No repositories found!", "⚠".yellow());

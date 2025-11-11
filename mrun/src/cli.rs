@@ -11,7 +11,7 @@ pub struct Args {
     pub dir: PathBuf,
 
     /// Command to execute in each repository (e.g., "git pull && npm install")
-    #[arg(short, long)]
+    #[arg(short = 'C', long)]
     pub command: Option<String>,
 
     /// Command to execute in each repository
@@ -24,11 +24,11 @@ pub struct Args {
 
     /// Command to list directories (e.g., "find . -type f  -maxdepth 2 -name "package.json" -printf '%P\n' | xargs -I {} dirname {}")
     /// If specifiied it will replace "ls"
-    #[arg(short, long)]
+    #[arg(short = 'L', long)]
     pub list_command: Option<String>,
 
     /// Select last failed repositories by default
-    #[arg(short,long)]
+    #[arg(short, long)]
     pub failed: Option<bool>,
 
     /// Log verbosity
