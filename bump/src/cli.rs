@@ -1,5 +1,5 @@
 use inquire::Select;
-use owo_colors::{colors::xterm, OwoColorize};
+use owo_colors::{OwoColorize, colors::xterm};
 use semver::Version;
 use std::fmt::{Display, Formatter};
 

@@ -91,10 +91,9 @@ fn run_ls_command(root: &Path, command: &str, pattern: Option<&str>) -> Vec<Repo
         repos.extend(
             String::from_utf8_lossy(&output.stdout)
                 .lines()
-                .into_iter()
                 .filter_map(|name| {
                     if let Some(reg) = &pattern_reg
-                        && !reg.is_match(&name)
+                        && !reg.is_match(name)
                     {
                         return None;
                     }
