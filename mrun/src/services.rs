@@ -3,6 +3,7 @@ use inquire::Confirm;
 use inquire::MultiSelect;
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -31,10 +32,16 @@ impl Repository {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
-    pub fn run_command(&self, command: &str) -> Result<Output> {
+    pub fn run_command<I, K, V>(&self, command: &str, vars: I) -> Result<Output>
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
         Command::new("bash")
             .arg("-c")
             .arg(command)
+            .envs(vars)
             .current_dir(&self.path)
             .stdout(Stdio::inherit())
             .output()
@@ -119,16 +126,21 @@ fn select_repositories(
 
     println!("\n{}", "Found repositories:".bright_green().bold());
 
-    let default = default_selection
-        .iter()
-        .filter_map(|name| repos.iter().position(|repo| &repo.name == name))
-        .collect::<Vec<_>>();
+    let (mut selected_repos, mut unselected_repos): (Vec<_>, Vec<_>) = repos
+        .into_iter()
+        .partition(|repo| default_selection.contains(&repo.name));
+
+    selected_repos.append(&mut unselected_repos);
+    let repos = selected_repos;
+
+    let default: Vec<_> = (0..default_selection.len().min(repos.len())).collect();
 
     let selected = MultiSelect::new(
         "Select repositories to process (Space to select, Enter to confirm):",
         repos,
     )
     .with_default(&default)
+    .with_page_size(20)
     .prompt()
     .context("Failed to get repository selection")?;
 
@@ -161,11 +173,12 @@ fn batch_run(repos: &[Repository], command: &str) -> Result<HashMap<String, bool
     let mut index = 1;
 
     for repo in repos {
-        println!("{} {index} / {}", repo.name, repos.len());
-        let output = repo.run_command(command)?;
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("{} {index} / {}\n", repo.name, repos.len());
+        let output = repo.run_command(command, [("REPO_NAME", repo.name.as_str())])?;
         results.insert(repo.name.clone(), output.status.success());
         index += 1;
-        println!("\n\n");
+        println!("\n");
     }
     Ok(results)
 }
@@ -232,14 +245,14 @@ pub async fn run(args: Args) -> Result<()> {
     let results = batch_run(&selected_repos, &command)?;
 
     let mut failed_repos = Vec::new();
-    results.into_iter().for_each(|(name, success)| {
+    for (name, success) in results.into_iter() {
         if success {
-            println!("{} {},", "✓".bright_green(), name.as_str().bright_cyan(),);
+            println!("{} {}", "✓".bright_green(), name.as_str().bright_cyan(),);
         } else {
             failed_repos.push(name.clone());
-            println!("{} {},", "✗".bright_red(), name.as_str().bright_cyan(),);
+            println!("{} {}", "✗".bright_red(), name.as_str().bright_cyan(),);
         }
-    });
+    }
 
     settings.last_failed_repos = failed_repos;
     write_settings(&settings)?;

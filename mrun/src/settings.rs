@@ -48,7 +48,7 @@ pub fn load_settings() -> anyhow::Result<Settings> {
                         config_path.display(),
                         e
                     )
-                })?
+                })?;
         }
     }
 
@@ -63,7 +63,7 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
         let config_path = config_folder.join("config.toml");
         let toml_string = toml::to_string(settings)?;
 
-        fs::write(config_path, toml_string)?
+        fs::write(config_path, toml_string)?;
     }
 
     Ok(())
