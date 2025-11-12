@@ -2,8 +2,7 @@ use anyhow::Result;
 use config::{Config, File};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
-use std::{env, fs::OpenOptions, path::PathBuf};
+use std::{env, path::PathBuf};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
@@ -64,7 +63,7 @@ pub fn write_settings(settings: &Settings) -> Result<()> {
         let config_path = config_folder.join("config.toml");
         let toml_string = toml::to_string(settings)?;
 
-        fs::write(config_path, toml_string);
+        fs::write(config_path, toml_string)?
     }
 
     Ok(())
