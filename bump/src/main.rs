@@ -143,14 +143,14 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
             // For Cargo.toml, version is under [package]
             if file_name == "Cargo.toml" {
                 if let Some(package) = toml.get("package")
-                    && let Some(version_value) = package.get("version") {
-                        let version_str = version_value
-                            .as_str()
-                            .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
-                        return Version::parse(version_str).context(format!(
-                            "Failed to parse version '{version_str}' as semver",
-                        ));
-                    }
+                    && let Some(version_value) = package.get("version")
+                {
+                    let version_str = version_value
+                        .as_str()
+                        .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
+                    return Version::parse(version_str)
+                        .context(format!("Failed to parse version '{version_str}' as semver",));
+                }
                 bail!(
                     "Cannot find 'package.version' field in {}",
                     file_path.display()

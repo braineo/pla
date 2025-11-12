@@ -67,9 +67,10 @@ impl Repo {
         }
 
         if file_name.to_string_lossy() == "package-lock.json"
-            && let Some(version) = json_value.pointer_mut("/packages//version") {
-                *version = json!(next_version)
-            };
+            && let Some(version) = json_value.pointer_mut("/packages//version")
+        {
+            *version = json!(next_version)
+        };
 
         let mut file = File::create(&full_path)?;
         let updated_package_json_str = serde_json::to_string_pretty(&json_value)?;
