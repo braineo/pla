@@ -1,27 +1,19 @@
 [package]
-name = "mm2glab"
-version = "0.1.1-beta.5"
+name = "mrun"
+version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
-reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
 tokio = { version = "1.43", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-chrono = "0.4"
 anyhow = "1.0"
-tempfile = "3.10"
-regex = "1.10"
-async-trait = "0.1"
-ollama-rs = { version = "0.2", features = ["tokio"] }
-edit = "0.1"
-futures = "0.3.31"
 indicatif = "0.17.11"
-termimad = "0.31.2"
 env_logger = "0.11.6"
 log = "0.4.26"
 config = { version = "0.15.11", features = ["toml"] }
-tera = "1.20"
-directories = "6.0.0"
 inquire = { version = "0.7.5", features = ["editor"] }
+owo-colors = "4"
+regex = "1.10"
+toml = "0.9.8"

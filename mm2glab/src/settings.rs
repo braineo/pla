@@ -142,10 +142,11 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
         new_args.prompt = DEFAULT_PROMPT_TEMPLATE.to_string();
     }
 
-    if let Some(ollama_model) = settings.ollama_model {
-        if !ollama_model.is_empty() && new_args.ollama_model == "deepseek-r1:latest" {
-            new_args.ollama_model = ollama_model;
-        }
+    if let Some(ollama_model) = settings.ollama_model
+        && !ollama_model.is_empty()
+        && new_args.ollama_model == "deepseek-r1:latest"
+    {
+        new_args.ollama_model = ollama_model;
     }
 
     debug!("merged config: {:?}", new_args);

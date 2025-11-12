@@ -1,6 +1,6 @@
-use clap::{value_parser, Arg, Command};
+use clap::{Arg, Command, value_parser};
 use comfy_table::Table;
-use log::{debug, info, warn, LevelFilter};
+use log::{LevelFilter, debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
