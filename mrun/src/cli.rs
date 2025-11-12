@@ -23,13 +23,13 @@ pub struct Args {
     pub match_regexp: Option<String>,
 
     /// Command to list directories (e.g., "find . -type f  -maxdepth 2 -name "package.json" -printf '%P\n' | xargs -I {} dirname {}")
-    /// If specifiied it will replace "ls"
+    /// If specified it will replace "ls"
     #[arg(short = 'L', long)]
     pub list_command: Option<String>,
 
     /// Select last failed repositories by default
     #[arg(short, long)]
-    pub failed: Option<bool>,
+    pub failed: bool,
 
     /// Log verbosity
     #[arg(short, long, value_name = "LEVEL", default_value_t = LogLevel::Info)]

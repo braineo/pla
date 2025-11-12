@@ -82,8 +82,7 @@ fn run_ls_command(root: &Path, command: &str, pattern: Option<&str>) -> Vec<Repo
         .arg("-c")
         .arg(command)
         .current_dir(root)
-        .output()
-        .context("Failed to execute command in {self.name}");
+        .output();
 
     if let Ok(output) = command_result {
         repos.extend(
@@ -189,9 +188,7 @@ pub async fn run(args: Args) -> Result<()> {
 
     let selected_repos = select_repositories(
         repos,
-        if let Some(resume_failed) = args.failed
-            && resume_failed
-        {
+        if args.failed {
             &settings.last_failed_repos
         } else {
             &settings.last_selected_repos
