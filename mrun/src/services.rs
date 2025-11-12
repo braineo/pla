@@ -158,10 +158,14 @@ fn get_command(
 
 fn batch_run(repos: &[Repository], command: &str) -> Result<HashMap<String, bool>> {
     let mut results = HashMap::new();
+    let mut index = 1;
 
     for repo in repos {
+        println!("{} {index} / {}", repo.name, repos.len());
         let output = repo.run_command(command)?;
         results.insert(repo.name.clone(), output.status.success());
+        index += 1;
+        println!("\n\n");
     }
     Ok(results)
 }

@@ -59,17 +59,12 @@ pub fn load_settings() -> anyhow::Result<Settings> {
 pub fn write_settings(settings: &Settings) -> Result<()> {
     if let Some(xdg_config) = get_xdg_config_path() {
         let config_folder = xdg_config.join(CONFIG_FILE_NAME);
-        fs::create_dir_all(&config_folder)?;
+        fs::create_dir_all(&config_folder).expect("Failed to create directory");
 
         let config_path = config_folder.join("config.toml");
         let toml_string = toml::to_string(settings)?;
 
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(config_path)?;
-
-        file.write_all(toml_string.as_bytes())?
+        fs::write(config_path, toml_string);
     }
 
     Ok(())
