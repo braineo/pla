@@ -22,16 +22,6 @@ struct Repository {
 }
 
 impl Repository {
-    fn get_status(&self) -> Result<String> {
-        let output = Command::new("git")
-            .args(["status", "--short"])
-            .current_dir(&self.path)
-            .output()
-            .context("Failed to get git status")?;
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
-
     pub fn run_command<I, K, V>(&self, command: &str, vars: I) -> Result<Output>
     where
         I: IntoIterator<Item = (K, V)>,
