@@ -32,6 +32,29 @@ cargo install --git https://github.com/braineo/pla [package_name] --no-track --f
 
 ## Development
 
+### Running Tests
+
+To run all tests in the workspace:
+
+```shell
+# Run all tests
+cargo test
+
+# Run tests for a specific package
+cargo test --package bump
+cargo test --package mm2glab
+cargo test --package mrun
+cargo test --package pla
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run a specific test
+cargo test test_increment_major
+```
+
+### Release
+
 To release a new version:
 
 ```shell

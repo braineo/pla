@@ -108,3 +108,158 @@ fn increment_last_identifier(release: &str) -> String {
         None => format!("{release}.1"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_increment_major() {
+        let version = Version::parse("1.2.3").unwrap();
+        let bumped = version.increment_major();
+        assert_eq!(bumped, Version::parse("2.0.0").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_increment_major_with_prerelease() {
+        let version = Version::parse("1.2.3-beta.1").unwrap();
+        let bumped = version.increment_major();
+        assert_eq!(bumped, Version::parse("2.0.0").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_increment_minor() {
+        let version = Version::parse("1.2.3").unwrap();
+        let bumped = version.increment_minor();
+        assert_eq!(bumped, Version::parse("1.3.0").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_increment_minor_with_prerelease() {
+        let version = Version::parse("1.2.3-alpha.1").unwrap();
+        let bumped = version.increment_minor();
+        assert_eq!(bumped, Version::parse("1.3.0").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_increment_patch() {
+        let version = Version::parse("1.2.3").unwrap();
+        let bumped = version.increment_patch();
+        assert_eq!(bumped, Version::parse("1.2.4").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_increment_patch_with_prerelease() {
+        let version = Version::parse("1.2.3-rc.1").unwrap();
+        let bumped = version.increment_patch();
+        assert_eq!(bumped, Version::parse("1.2.4").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_increment_prerelease_numeric() {
+        let version = Version::parse("1.2.3-0").unwrap();
+        let bumped = version.increment_prerelease();
+        assert_eq!(bumped, Version::parse("1.2.3-1").unwrap());
+    }
+
+    #[test]
+    fn test_increment_prerelease_with_dot() {
+        let version = Version::parse("1.2.3-beta.0").unwrap();
+        let bumped = version.increment_prerelease();
+        assert_eq!(bumped, Version::parse("1.2.3-beta.1").unwrap());
+    }
+
+    #[test]
+    fn test_increment_prerelease_multiple_dots() {
+        let version = Version::parse("1.2.3-alpha.0.5").unwrap();
+        let bumped = version.increment_prerelease();
+        assert_eq!(bumped, Version::parse("1.2.3-alpha.0.6").unwrap());
+    }
+
+    #[test]
+    fn test_increment_prerelease_non_numeric() {
+        let version = Version::parse("1.2.3-beta").unwrap();
+        let bumped = version.increment_prerelease();
+        assert_eq!(bumped, Version::parse("1.2.3-beta.1").unwrap());
+    }
+
+    #[test]
+    fn test_append_prerelease_identifiers() {
+        let version = Version::parse("1.2.3").unwrap();
+        let bumped = version.append_prerelease_identifiers("beta.0");
+        assert_eq!(bumped, Version::parse("1.2.3-beta.0").unwrap());
+    }
+
+    #[test]
+    fn test_append_prerelease_identifiers_replaces_existing() {
+        let version = Version::parse("1.2.3-alpha.1").unwrap();
+        let bumped = version.append_prerelease_identifiers("beta.0");
+        assert_eq!(bumped, Version::parse("1.2.3-beta.0").unwrap());
+    }
+
+    #[test]
+    fn test_convert_prerelease_to_release() {
+        let version = Version::parse("1.2.3-beta.5").unwrap();
+        let bumped = version.convert_prerelease_to_release();
+        assert_eq!(bumped, Version::parse("1.2.3").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_convert_prerelease_to_release_no_prerelease() {
+        let version = Version::parse("1.2.3").unwrap();
+        let bumped = version.convert_prerelease_to_release();
+        assert_eq!(bumped, Version::parse("1.2.3").unwrap());
+        assert!(bumped.pre.is_empty());
+    }
+
+    #[test]
+    fn test_increment_last_identifier_numeric() {
+        assert_eq!(increment_last_identifier("0"), "1");
+        assert_eq!(increment_last_identifier("5"), "6");
+        assert_eq!(increment_last_identifier("99"), "100");
+    }
+
+    #[test]
+    fn test_increment_last_identifier_with_dot() {
+        assert_eq!(increment_last_identifier("beta.0"), "beta.1");
+        assert_eq!(increment_last_identifier("alpha.5"), "alpha.6");
+        assert_eq!(increment_last_identifier("rc.99"), "rc.100");
+    }
+
+    #[test]
+    fn test_increment_last_identifier_multiple_dots() {
+        assert_eq!(increment_last_identifier("alpha.0.5"), "alpha.0.6");
+        assert_eq!(increment_last_identifier("beta.1.2"), "beta.1.3");
+    }
+
+    #[test]
+    fn test_increment_last_identifier_non_numeric() {
+        assert_eq!(increment_last_identifier("beta"), "beta.1");
+        assert_eq!(increment_last_identifier("alpha"), "alpha.1");
+    }
+
+    #[test]
+    fn test_increment_last_identifier_non_numeric_suffix() {
+        assert_eq!(increment_last_identifier("beta.abc"), "beta.abc.1");
+    }
+
+    #[test]
+    fn test_build_metadata_preserved() {
+        let version = Version::parse("1.2.3+build123").unwrap();
+        let major = version.increment_major();
+        assert_eq!(major.build, version.build);
+
+        let minor = version.increment_minor();
+        assert_eq!(minor.build, version.build);
+
+        let patch = version.increment_patch();
+        assert_eq!(patch.build, version.build);
+    }
+}

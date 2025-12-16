@@ -16,3 +16,6 @@ semver = "1.0.23"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = { version = "1.0.128", features = ["preserve_order"] }
 toml_edit = { version = "0.22.24", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3.0"
