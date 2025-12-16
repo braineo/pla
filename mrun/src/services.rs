@@ -34,6 +34,7 @@ impl Repository {
             .envs(vars)
             .current_dir(&self.path)
             .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .output()
             .context("Failed to execute command in {self.name}")
     }

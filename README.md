@@ -18,6 +18,10 @@ Bumps version numbers in various JSON files like `package.json` and `package-loc
 
 I got tired of copy-pasting issue reports from Mattermost and reformatting them into GitLab issues. That's a full-time job nobody wants. This tool converts Mattermost conversation threads into GitLab issues with the help of Ollama (local LLM), saving countless hours of mind-numbing reformatting.
 
+### mrun
+
+Going through a bunch of repositories migrate code is painful. `mrun` is a little helper to run any shell scripts in a collection of repositories. Saving running `cd`, `cd..`, `cd`, `cd..` and prevent from forgetting which repo is done.
+
 ## Installation
 
 If these sound useful:
