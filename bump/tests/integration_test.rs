@@ -1,10 +1,6 @@
+use bump::repo::Repo;
 use std::fs;
 use tempfile::TempDir;
-
-#[path = "../src/repo.rs"]
-mod repo;
-
-use repo::Repo;
 
 fn setup_test_dir() -> TempDir {
     tempfile::tempdir().unwrap()
