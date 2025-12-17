@@ -1,15 +1,10 @@
-use crate::repo::Repo;
 use anyhow::{Context, Result, anyhow, bail};
-use bump_version::{BumpType, BumpVersion};
 use clap::{Arg, ArgAction, Command, ValueEnum, value_parser};
 use clap_complete::{Generator, Shell, generate};
-use cli::prompt_version_select;
-
 use log::{debug, info};
 use owo_colors::{OwoColorize, colors::xterm};
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use settings::init_settings;
 use toml_edit::DocumentMut;
 
 use std::{
@@ -19,10 +14,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub mod bump_version;
-pub mod cli;
-pub mod repo;
-pub mod settings;
+use bump::bump_version::{BumpType, BumpVersion};
+use bump::cli::prompt_version_select;
+use bump::repo::Repo;
+use bump::settings::init_settings;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, ValueEnum, PartialOrd, Ord)]
 pub enum Action {

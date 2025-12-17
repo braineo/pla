@@ -18,6 +18,10 @@ Bumps version numbers in various JSON files like `package.json` and `package-loc
 
 I got tired of copy-pasting issue reports from Mattermost and reformatting them into GitLab issues. That's a full-time job nobody wants. This tool converts Mattermost conversation threads into GitLab issues with the help of Ollama (local LLM), saving countless hours of mind-numbing reformatting.
 
+### mrun
+
+Going through a bunch of repositories to migrate code is painful. `mrun` is a little helper to run any shell scripts in a collection of repositories. It saves you from repeatedly running `cd`, `cd..` and helps you keep track of which repositories have been processed.
+
 ## Installation
 
 If these sound useful:
@@ -27,6 +31,29 @@ cargo install --git https://github.com/braineo/pla [package_name] --no-track --f
 ```
 
 ## Development
+
+### Running Tests
+
+To run all tests in the workspace:
+
+```shell
+# Run all tests
+cargo test
+
+# Run tests for a specific package
+cargo test --package bump
+cargo test --package mm2glab
+cargo test --package mrun
+cargo test --package pla
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run a specific test
+cargo test test_increment_major
+```
+
+### Release
 
 To release a new version:
 
