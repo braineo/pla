@@ -20,7 +20,7 @@ impl Repo {
         if directory.exists() {
             Ok(Self { directory })
         } else {
-            Err(anyhow!("{} does not exists.", directory.to_string_lossy()))
+            Err(anyhow!("{} does not exist.", directory.to_string_lossy()))
         }
     }
 

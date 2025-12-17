@@ -20,7 +20,7 @@ I got tired of copy-pasting issue reports from Mattermost and reformatting them 
 
 ### mrun
 
-Going through a bunch of repositories migrate code is painful. `mrun` is a little helper to run any shell scripts in a collection of repositories. Saving running `cd`, `cd..`, `cd`, `cd..` and prevent from forgetting which repo is done.
+Going through a bunch of repositories to migrate code is painful. `mrun` is a little helper to run any shell scripts in a collection of repositories. It saves you from repeatedly running `cd`, `cd..` and helps you keep track of which repositories have been processed.
 
 ## Installation
 

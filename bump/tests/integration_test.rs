@@ -109,9 +109,10 @@ serde = "1.0"
 
     // Read and verify
     let content = fs::read_to_string(temp_path.join("Cargo.toml")).unwrap();
-    assert!(content.contains(r#"version = "0.2.0""#));
-    assert!(content.contains(r#"name = "test-crate""#));
-    assert!(content.contains(r#"edition = "2024""#));
+    let toml: toml_edit::DocumentMut = content.parse().unwrap();
+    assert_eq!(toml["package"]["version"].as_str(), Some("0.2.0"));
+    assert_eq!(toml["package"]["name"].as_str(), Some("test-crate"));
+    assert_eq!(toml["package"]["edition"].as_str(), Some("2024"));
 }
 
 #[test]
@@ -147,7 +148,7 @@ tempfile = "3.0"
 fn test_repo_new_with_nonexistent_directory() {
     let result = Repo::new("/nonexistent/path".into());
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("does not exists"));
+    assert!(result.unwrap_err().to_string().contains("does not exist"));
 }
 
 #[test]
