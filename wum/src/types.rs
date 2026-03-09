@@ -26,6 +26,7 @@ pub struct TodoItem {
 
 #[derive(Deserialize, Debug)]
 pub struct MrViewResponse {
+    pub state: String,
     pub detailed_merge_status: Option<String>,
     pub web_url: Option<String>,
     pub source_branch: Option<String>,

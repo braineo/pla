@@ -59,6 +59,10 @@ pub async fn process_mr_once(
     let mr_info: MrViewResponse =
         serde_json::from_slice(&output.stdout).context("Failed to parse glab mr view JSON")?;
 
+    if mr_info.state == "merged" {
+        return Ok(true);
+    }
+
     let detailed_status = mr_info.detailed_merge_status.as_deref().unwrap_or("");
     let url = mr_info.web_url.clone().unwrap_or_default();
     let source_branch = mr_info.source_branch.clone().unwrap_or_default();
