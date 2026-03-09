@@ -27,11 +27,7 @@ use crate::ui::draw_ui;
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    let org_file = if args.org_file.is_absolute() {
-        args.org_file.clone()
-    } else {
-        std::env::current_dir()?.join(&args.org_file)
-    };
+    let org_file = std::env::current_dir()?.join(&args.org_file);
     let org_file = Arc::new(org_file);
 
     let (tx, rx) = mpsc::unbounded_channel::<AppEvent>();
@@ -171,10 +167,10 @@ async fn run_app(
                     }
                 }
                 AppEvent::MarkDoneInFile { repo, iid } => {
-                    mark_done_in_file(&org_file, &repo, &iid).await;
+                    let _ = mark_done_in_file(&org_file, &repo, &iid).await;
                 }
                 AppEvent::LogIssueInFile { repo, iid, message } => {
-                    log_issue_in_file(&org_file, &repo, &iid, &message).await;
+                    let _ = log_issue_in_file(&org_file, &repo, &iid, &message).await;
                 }
                 AppEvent::UiEvent(_) | AppEvent::Tick => {}
             }
