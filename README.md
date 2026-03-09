@@ -22,6 +22,16 @@ I got tired of copy-pasting issue reports from Mattermost and reformatting them 
 
 Going through a bunch of repositories to migrate code is painful. `mrun` is a little helper to run any shell scripts in a collection of repositories. It saves you from repeatedly running `cd`, `cd..` and helps you keep track of which repositories have been processed.
 
+### wum
+
+Checking GitLab tabs every 5 minutes to see if an MR is ready to
+merge, needs a rebase, or is waiting on a manual CI job is
+soul-crushing. `wum` watches an Emacs Org-mode file where I drop my MR
+to-dos (`* TODO repo!123`). It tracks them in a nice TUI, automatically
+rebases outdated branches, triggers manual CI steps, and merges them
+as soon as they're ready. Then it aggressively marks them as `DONE`
+right in my org file so I can forget they ever existed.
+
 ## Installation
 
 If these sound useful:
@@ -45,6 +55,7 @@ cargo test --package bump
 cargo test --package mm2glab
 cargo test --package mrun
 cargo test --package pla
+cargo test --package wum
 
 # Run tests with output
 cargo test -- --nocapture
