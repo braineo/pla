@@ -62,12 +62,13 @@ fn setup_file_watcher(
     );
 
     if let Ok(mut debouncer) = debouncer_opt
-        && let Some(parent) = org_file.parent() {
-            let _ = debouncer
-                .watcher()
-                .watch(parent, RecursiveMode::NonRecursive);
-            return Some(debouncer);
-        }
+        && let Some(parent) = org_file.parent()
+    {
+        let _ = debouncer
+            .watcher()
+            .watch(parent, RecursiveMode::NonRecursive);
+        return Some(debouncer);
+    }
     None
 }
 
@@ -123,7 +124,9 @@ async fn run_app(
                         for todo in todos {
                             let key = format!("{}!{}", todo.repo, todo.iid);
                             current_keys.insert(key.clone());
-                            if let std::collections::hash_map::Entry::Vacant(e) = active_tasks.entry(key) {
+                            if let std::collections::hash_map::Entry::Vacant(e) =
+                                active_tasks.entry(key)
+                            {
                                 mr_list.push(MrState {
                                     repo: todo.repo.clone(),
                                     iid: todo.iid.clone(),
