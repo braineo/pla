@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::cli::Args;
 
-pub const DEFAULT_PROMPT_TEMPLATE: &str = r#"
+pub const DEFAULT_PROMPT_TEMPLATE: &str = r"
 # GitHub Issue Generator
 
 As an expert software developer and technical writer, your task is to convert the following Mattermost thread content into a well-structured GitHub issue.
@@ -56,7 +56,7 @@ Respond in this exact format with nothing else.
 
 title: <Concise and descriptive title in exactly one line>
 description: <Full formatted description with appropriate sections from above>
-"#;
+";
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
@@ -114,7 +114,7 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
                         config_path.display(),
                         e
                     )
-                })?
+                })?;
         }
     }
 
@@ -149,7 +149,7 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
         new_args.ollama_model = ollama_model;
     }
 
-    debug!("merged config: {:?}", new_args);
+    debug!("merged config: {new_args:?}");
 
     let missing_required_fields = [
         ("Gitlab URL", new_args.gitlab_url.is_empty()),

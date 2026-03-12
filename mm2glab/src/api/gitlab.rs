@@ -22,6 +22,7 @@ pub struct GitLabClient {
 }
 
 impl GitLabClient {
+    #[must_use]
     pub fn new(base_url: String, token: String, project_id: String) -> Self {
         let mut headers = header::HeaderMap::new();
         headers.insert(
@@ -51,9 +52,7 @@ impl GitLabClient {
         if !status.is_success() {
             let error_text = response.text().await?;
             return Err(anyhow::anyhow!(
-                "GitLab API request failed with status {}: {}",
-                status,
-                error_text
+                "GitLab API request failed with status {status}: {error_text}"
             ));
         }
         response.json().await.map_err(Into::into)
@@ -113,10 +112,9 @@ impl GitLabApi for GitLabClient {
 
             if members.is_empty() {
                 break;
-            } else {
-                all_members.extend(members);
-                page += 1;
             }
+            all_members.extend(members);
+            page += 1;
         }
 
         Ok(all_members

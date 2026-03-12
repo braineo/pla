@@ -26,7 +26,7 @@ struct IssueTemplateContext {
     reason: String,
 }
 
-const ISSUE_TEMPLATE: &str = r#"
+const ISSUE_TEMPLATE: &str = r"
 **Source**: {{ source_link }}
 
 ## Description
@@ -39,7 +39,7 @@ const ISSUE_TEMPLATE: &str = r#"
 
 {{ reason }}
 </details>
-"#;
+";
 
 #[derive(serde::Serialize)]
 struct ConversationTemplateContext {
@@ -47,7 +47,7 @@ struct ConversationTemplateContext {
     medias: String,
 }
 
-const CONVERSATION_TEMPLATE: &str = r#"
+const CONVERSATION_TEMPLATE: &str = r"
 <details>
 
 <summary>Open Conversation Thread</summary>
@@ -58,7 +58,7 @@ const CONVERSATION_TEMPLATE: &str = r#"
 ## Medias
 
 {{ medias }}
-"#;
+";
 
 pub async fn run(args: Args) -> Result<()> {
     let args = merge_settings_with_args(&args)?;
@@ -89,10 +89,10 @@ pub async fn run(args: Args) -> Result<()> {
 
     let description = format_issue_description(&args.permalink, &ai_description, &ai_reason)?;
 
-    let (final_title, final_description) = if !args.no_preview {
-        preview_and_confirm(&title, &description)?
-    } else {
+    let (final_title, final_description) = if args.no_preview {
         (title, description)
+    } else {
+        preview_and_confirm(&title, &description)?
     };
 
     let mut issue = IssueChangeset::new();
@@ -222,8 +222,9 @@ async fn analyze_conversation(
 
     let title = lines
         .next()
-        .map(|line| line.trim_start_matches("title:").trim())
-        .unwrap_or("Untitled Issue")
+        .map_or("Untitled Issue", |line| {
+            line.trim_start_matches("title:").trim()
+        })
         .to_string();
 
     let description = lines
@@ -251,7 +252,7 @@ async fn select_assignees(gitlab_client: &impl GitLabApi) -> Result<Option<Vec<u
 
     let selected = MultiSelect::new("Select assignees:", members)
         .prompt()
-        .map_err(|e| anyhow::anyhow!("Failed to select assignees: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to select assignees: {e}"))?;
 
     if selected.is_empty() {
         return Ok(None);
@@ -280,7 +281,7 @@ async fn format_conversation_and_attachments(
             .sum::<usize>() as u64,
     );
 
-    for post in conversations.iter() {
+    for post in conversations {
         markdown_lines.push(format_conversation(post));
 
         if let Some(file_ids) = &post.file_ids {
@@ -337,9 +338,9 @@ async fn format_conversation_and_attachments(
 
     let mut tera = Tera::default();
     let context = Context::from_serialize(&template_context)
-        .map_err(|e| anyhow::anyhow!("Failed to create template context: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create template context: {e}"))?;
     tera.render_str(CONVERSATION_TEMPLATE, &context)
-        .map_err(|e| anyhow::anyhow!("Failed to render template: {}", e))
+        .map_err(|e| anyhow::anyhow!("Failed to render template: {e}"))
 }
 
 fn format_conversation(conversation: &Conversation) -> String {
@@ -364,9 +365,9 @@ fn format_issue_description(
 
     let mut tera = Tera::default();
     let context = Context::from_serialize(&template_context)
-        .map_err(|e| anyhow::anyhow!("Failed to create template context: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create template context: {e}"))?;
     tera.render_str(ISSUE_TEMPLATE, &context)
-        .map_err(|e| anyhow::anyhow!("Failed to render template: {}", e))
+        .map_err(|e| anyhow::anyhow!("Failed to render template: {e}"))
 }
 
 fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String)> {
