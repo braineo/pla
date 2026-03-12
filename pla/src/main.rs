@@ -141,7 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         package_name.clone(),
                         version_vec
                             .iter()
-                            .map(|s| (*s).clone())
+                            .map(|&s| s.clone())
                             .collect::<Vec<_>>()
                             .join(", "),
                     ))
