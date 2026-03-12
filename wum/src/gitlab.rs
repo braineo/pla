@@ -4,7 +4,10 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
-pub fn spawn_mr_processor(todo: TodoItem, tx: mpsc::UnboundedSender<AppEvent>) {
+pub fn spawn_mr_processor(
+    todo: TodoItem,
+    tx: mpsc::UnboundedSender<AppEvent>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
             match process_mr_once(&todo, &tx).await {
@@ -39,7 +42,7 @@ pub fn spawn_mr_processor(todo: TodoItem, tx: mpsc::UnboundedSender<AppEvent>) {
                 }
             }
         }
-    });
+    })
 }
 
 pub async fn process_mr_once(
