@@ -111,13 +111,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             None => {
-                warn!("no packages to iterate")
+                warn!("no packages to iterate");
             }
         }
 
         let diverged_count: usize = package_versions
             .values()
-            .map(|value| if value.len() > 1 { 1 } else { 0 })
+            .map(|value| usize::from(value.len() > 1))
             .sum();
 
         info!(
@@ -141,7 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         package_name.clone(),
                         version_vec
                             .iter()
-                            .map(|s| s.to_string())
+                            .map(|&s| s.clone())
                             .collect::<Vec<_>>()
                             .join(", "),
                     ))
@@ -158,7 +158,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 table.add_row(vec![package_name, versions]);
             }
         }
-        println!("{table}")
+        println!("{table}");
     }
     Ok(())
 }

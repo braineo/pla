@@ -22,6 +22,7 @@ impl Display for VersionLabel {
     }
 }
 
+#[must_use]
 pub fn prompt_version_select(current_version: &Version, prerelease_identifier: &str) -> Version {
     let mut options = vec![
         VersionLabel::new("major", current_version.increment_major()),
@@ -41,7 +42,7 @@ pub fn prompt_version_select(current_version: &Version, prerelease_identifier: &
         options.push(VersionLabel::new(
             "release",
             current_version.convert_prerelease_to_release(),
-        ))
+        ));
     }
     options.extend(vec![
         VersionLabel::new(

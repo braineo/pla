@@ -27,22 +27,21 @@ pub fn init_settings(project_path: &Path) -> anyhow::Result<Settings> {
 
     let tag_prefix = raw_settings.tag_prefix.unwrap_or_else(|| "v".to_string());
 
-    let version_file = match raw_settings.version_file {
-        Some(version_file) => version_file,
-        None => {
-            let candidates = vec!["package.json", "Cargo.toml"];
+    let version_file = if let Some(version_file) = raw_settings.version_file {
+        version_file
+    } else {
+        let candidates = vec!["package.json", "Cargo.toml"];
 
-            candidates
-                .into_iter()
-                .find_map(|file_candidate| {
-                    if project_path.join(file_candidate).exists() {
-                        Some(file_candidate.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_else(|| "package.json".to_string())
-        }
+        candidates
+            .into_iter()
+            .find_map(|file_candidate| {
+                if project_path.join(file_candidate).exists() {
+                    Some(file_candidate.to_string())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "package.json".to_string())
     };
 
     let bump_files = match raw_settings.bump_files {

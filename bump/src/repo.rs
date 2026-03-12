@@ -32,7 +32,7 @@ impl Repo {
         let message = format!("chore(release): {next_version}");
         run_git_command(&self.directory, &["commit", "-m", &message])?;
 
-        Ok(String::from(""))
+        Ok(String::new())
     }
 
     pub fn tag_release(&self, next_version: &str, tag_prefix: &str) -> anyhow::Result<String> {
@@ -48,11 +48,11 @@ impl Repo {
             ],
         )?;
 
-        Ok(String::from(""))
+        Ok(String::new())
     }
 
     pub fn bump_json(&self, file_path: &str, next_version: &str) -> anyhow::Result<()> {
-        info!("bump {} to {}", file_path, next_version);
+        info!("bump {file_path} to {next_version}");
         let full_path = self.directory.join(file_path);
         let file_name = match full_path.file_name() {
             Some(file_name) => file_name,
@@ -69,8 +69,8 @@ impl Repo {
         if file_name.to_string_lossy() == "package-lock.json"
             && let Some(version) = json_value.pointer_mut("/packages//version")
         {
-            *version = json!(next_version)
-        };
+            *version = json!(next_version);
+        }
 
         let mut file = File::create(&full_path)?;
         let updated_package_json_str = serde_json::to_string_pretty(&json_value)?;
@@ -81,7 +81,7 @@ impl Repo {
     }
 
     pub fn bump_toml(&self, file_path: &str, next_version: &str) -> anyhow::Result<()> {
-        info!("bump {} to {}", file_path, next_version);
+        info!("bump {file_path} to {next_version}");
         let full_path = self.directory.join(file_path);
 
         let mut toml_doc: DocumentMut = fs::read_to_string(&full_path)?
@@ -107,7 +107,7 @@ fn run_git_command(dir: &PathBuf, args: &[&str]) -> anyhow::Result<String> {
             format!("error while running git in directory `{dir:?}` with args `{args:?}`")
         })?;
 
-    info!("git {:?}: output = {:?}", args, output);
+    info!("git {args:?}: output = {output:?}");
     let stdout = String::from_utf8_lossy(&output.stdout);
     if output.status.success() {
         Ok(stdout.as_ref().into())

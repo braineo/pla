@@ -125,7 +125,7 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Version in JSON is not a string"))?;
                 Version::parse(version_str)
-                    .context(format!("Failed to parse version '{version_str}' as semver",))
+                    .context(format!("Failed to parse version '{version_str}' as semver"))
             } else {
                 bail!("Cannot find 'version' field in {}", file_path.display());
             }
@@ -144,23 +144,22 @@ fn get_version_from_file(file_path: &Path) -> Result<Version> {
                         .as_str()
                         .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
                     return Version::parse(version_str)
-                        .context(format!("Failed to parse version '{version_str}' as semver",));
+                        .context(format!("Failed to parse version '{version_str}' as semver"));
                 }
                 bail!(
                     "Cannot find 'package.version' field in {}",
                     file_path.display()
                 );
+            }
+            // For other TOML files, try to find version at the root
+            if let Some(version_value) = toml.get("version") {
+                let version_str = version_value
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
+                Version::parse(version_str)
+                    .context(format!("Failed to parse version '{version_str}' as semver"))
             } else {
-                // For other TOML files, try to find version at the root
-                if let Some(version_value) = toml.get("version") {
-                    let version_str = version_value
-                        .as_str()
-                        .ok_or_else(|| anyhow::anyhow!("Version in TOML is not a string"))?;
-                    Version::parse(version_str)
-                        .context(format!("Failed to parse version '{version_str}' as semver",))
-                } else {
-                    bail!("Cannot find 'version' field in {}", file_path.display());
-                }
+                bail!("Cannot find 'version' field in {}", file_path.display());
             }
         }
     }
@@ -196,8 +195,7 @@ fn main() -> anyhow::Result<()> {
 
     let prerelease_identifier = matches
         .get_one::<String>("pre_id")
-        .map(|pre_id| format!("{pre_id}.0"))
-        .unwrap_or("0".to_string());
+        .map_or("0".to_string(), |pre_id| format!("{pre_id}.0"));
 
     let mut next_version = if let Some(bump_type) = matches.get_one::<BumpType>("bump_type") {
         match bump_type {
@@ -248,7 +246,7 @@ fn main() -> anyhow::Result<()> {
             next_version.green()
         );
 
-        let file_names = std::iter::once(version_file_name.to_string())
+        let file_names = std::iter::once(version_file_name.clone())
             .chain(settings.bump_files)
             .collect::<Vec<_>>()
             .join(", ");
@@ -267,14 +265,14 @@ fn main() -> anyhow::Result<()> {
             );
 
             if !skip_actions.contains(&Action::Tag) {
-                println!("{}", "will tag version".bg::<xterm::Gray>(),);
+                println!("{}", "will tag version".bg::<xterm::Gray>());
             }
         }
 
         return Ok(());
     }
 
-    info!("bump to version {}", next_version);
+    info!("bump to version {next_version}");
 
     match detect_file_format(&project_repo.directory.join(&version_file_name))? {
         VersionFileFormat::Json => project_repo.bump_json(&version_file_name, &next_version)?,

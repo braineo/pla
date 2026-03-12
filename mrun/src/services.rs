@@ -42,7 +42,7 @@ impl Repository {
 
 impl std::fmt::Display for Repository {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}, ({})", self.name.bright_cyan(), self.path.display(),)
+        write!(f, "{}, ({})", self.name.bright_cyan(), self.path.display())
     }
 }
 
@@ -233,12 +233,12 @@ pub async fn run(args: Args) -> Result<()> {
     let results = batch_run(&selected_repos, &command)?;
 
     let mut failed_repos = Vec::new();
-    for (name, success) in results.into_iter() {
+    for (name, success) in results {
         if success {
-            println!("{} {}", "✓".bright_green(), name.as_str().bright_cyan(),);
+            println!("{} {}", "✓".bright_green(), name.as_str().bright_cyan());
         } else {
             failed_repos.push(name.clone());
-            println!("{} {}", "✗".bright_red(), name.as_str().bright_cyan(),);
+            println!("{} {}", "✗".bright_red(), name.as_str().bright_cyan());
         }
     }
 
