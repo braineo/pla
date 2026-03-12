@@ -143,14 +143,11 @@ async fn run_app(
                         }
                         mr_list.retain(|mr| {
                             let key = format!("{}!{}", mr.repo, mr.iid);
-                            if current_keys.contains(&key) {
-                                true
-                            } else {
-                                if let Some(handle) = active_tasks.remove(&key) {
-                                    handle.abort();
-                                }
-                                false
+                            let should_retain = current_keys.contains(&key);
+                            if !should_retain && let Some(handle) = active_tasks.remove(&key) {
+                                handle.abort();
                             }
+                            should_retain
                         });
                     }
                 }
