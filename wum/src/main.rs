@@ -13,7 +13,7 @@ use crossterm::{
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode};
 use ratatui::{Terminal, prelude::*};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -53,7 +53,7 @@ fn setup_file_watcher(
 ) -> Option<notify_debouncer_mini::Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>> {
     let tx_file = tx;
     let debouncer_opt = new_debouncer(
-        Duration::from_secs(1),
+        Duration::from_millis(250),
         move |res: Result<Vec<notify_debouncer_mini::DebouncedEvent>, _>| {
             if res.is_ok() {
                 let _ = tx_file.send(AppEvent::FileChanged);
@@ -62,7 +62,6 @@ fn setup_file_watcher(
     );
 
     if let Ok(mut debouncer) = debouncer_opt
-        && org_file.exists()
         && let Some(parent) = org_file.parent()
     {
         let _ = debouncer
@@ -101,7 +100,7 @@ async fn run_app(
     let mut terminal = Terminal::new(backend)?;
 
     let mut mr_list: Vec<MrState> = Vec::new();
-    let mut active_tasks: HashSet<String> = HashSet::new();
+    let mut active_tasks: HashMap<String, tokio::task::JoinHandle<()>> = HashMap::new();
 
     let _ = tx.send(AppEvent::FileChanged);
 
@@ -121,10 +120,13 @@ async fn run_app(
                 }
                 AppEvent::FileChanged => {
                     if let Ok(todos) = read_todos(&org_file).await {
+                        let mut current_keys = HashSet::new();
                         for todo in todos {
                             let key = format!("{}!{}", todo.repo, todo.iid);
-                            if !active_tasks.contains(&key) {
-                                active_tasks.insert(key.clone());
+                            current_keys.insert(key.clone());
+                            if let std::collections::hash_map::Entry::Vacant(e) =
+                                active_tasks.entry(key)
+                            {
                                 mr_list.push(MrState {
                                     repo: todo.repo.clone(),
                                     iid: todo.iid.clone(),
@@ -135,9 +137,18 @@ async fn run_app(
                                     done: false,
                                     completed_in: None,
                                 });
-                                spawn_mr_processor(todo, tx.clone());
+                                let handle = spawn_mr_processor(todo, tx.clone());
+                                e.insert(handle);
                             }
                         }
+                        mr_list.retain(|mr| {
+                            let key = format!("{}!{}", mr.repo, mr.iid);
+                            let should_retain = current_keys.contains(&key);
+                            if !should_retain && let Some(handle) = active_tasks.remove(&key) {
+                                handle.abort();
+                            }
+                            should_retain
+                        });
                     }
                 }
                 AppEvent::MrStateUpdate {
