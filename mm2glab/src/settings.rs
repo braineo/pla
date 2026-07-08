@@ -4,7 +4,7 @@ use config::{Config, File};
 use log::debug;
 use serde::Deserialize;
 
-use crate::cli::Args;
+use crate::cli::{FetchArgs, IssueArgs};
 
 pub const DEFAULT_PROMPT_TEMPLATE: &str = r"
 # GitHub Issue Generator
@@ -58,7 +58,7 @@ title: <Concise and descriptive title in exactly one line>
 description: <Full formatted description with appropriate sections from above>
 ";
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct Settings {
     pub mm_url: Option<String>,
     pub mm_token: Option<String>,
@@ -66,7 +66,9 @@ pub struct Settings {
     pub gitlab_token: Option<String>,
     pub project_id: Option<String>,
     pub ollama_model: Option<String>,
+    pub agent_command: Option<String>,
     pub prompt: Option<String>,
+    pub output_dir: Option<String>,
 }
 
 const CONFIG_FILE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -86,55 +88,63 @@ fn get_xdg_config_path() -> Option<PathBuf> {
     None
 }
 
-pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
-    let config_builder = Config::builder();
+// Apply a config value to an arg field only if the arg is not already set
+macro_rules! apply_if_empty {
+    ($args:expr, $field:ident, $config:expr) => {
+        if let Some(value) = $config.$field {
+            if $args.$field.is_empty() {
+                $args.$field = value.clone();
+            }
+        }
+    };
+}
+
+/// Load settings from the config file if present, otherwise return defaults.
+fn load_settings() -> anyhow::Result<Settings> {
+    let Some(xdg_config) = get_xdg_config_path() else {
+        return Ok(Settings::default());
+    };
+
+    let config_path = xdg_config.join(CONFIG_FILE_NAME).join("config.toml");
+    if !config_path.exists() {
+        return Ok(Settings::default());
+    }
+
+    Config::builder()
+        .add_source(File::from(config_path.clone()).required(false))
+        .build()?
+        .try_deserialize()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to deserialize config file {}: {}",
+                config_path.display(),
+                e
+            )
+        })
+}
+
+fn exit_if_missing(missing: &[&str]) {
+    if !missing.is_empty() {
+        eprintln!(
+            "Error: The following required fields are missing: {}",
+            missing.join(", ")
+        );
+        eprintln!("Please specify with CLI flag, environment variable, or in config.toml");
+        std::process::exit(1);
+    }
+}
+
+pub fn merge_issue_settings_with_args(args: &IssueArgs) -> anyhow::Result<IssueArgs> {
+    let settings = load_settings()?;
 
     let mut new_args = args.clone();
 
-    let mut settings = Settings {
-        mm_url: None,
-        mm_token: None,
-        gitlab_url: None,
-        gitlab_token: None,
-        project_id: None,
-        ollama_model: None,
-        prompt: None,
-    };
-
-    if let Some(xdg_config) = get_xdg_config_path() {
-        let config_path = xdg_config.join(CONFIG_FILE_NAME).join("config.toml");
-        if config_path.exists() {
-            settings = config_builder
-                .add_source(File::from(config_path.clone()).required(false))
-                .build()?
-                .try_deserialize()
-                .map_err(|e| {
-                    anyhow::anyhow!(
-                        "Failed to deserialize config file {}: {}",
-                        config_path.display(),
-                        e
-                    )
-                })?;
-        }
-    }
-
-    // Apply config values to args if they're not already set by CLI
-    // Using a macro to reduce repetition for string fields
-    macro_rules! apply_if_empty {
-        ($args:expr, $field:ident, $config:expr) => {
-            if let Some(value) = $config.$field {
-                if $args.$field.is_empty() {
-                    $args.$field = value.clone();
-                }
-            }
-        };
-    }
-
-    apply_if_empty!(new_args, mm_url, settings);
-    apply_if_empty!(new_args, mm_token, settings);
+    apply_if_empty!(new_args.common, mm_url, settings);
+    apply_if_empty!(new_args.common, mm_token, settings);
     apply_if_empty!(new_args, gitlab_url, settings);
     apply_if_empty!(new_args, gitlab_token, settings);
     apply_if_empty!(new_args, project_id, settings);
+    apply_if_empty!(new_args, agent_command, settings);
     apply_if_empty!(new_args, prompt, settings);
 
     // If no prompt is provided in either CLI or config, use the default template
@@ -151,25 +161,43 @@ pub fn merge_settings_with_args(args: &Args) -> anyhow::Result<Args> {
 
     debug!("merged config: {new_args:?}");
 
-    let missing_required_fields = [
+    let missing = [
         ("Gitlab URL", new_args.gitlab_url.is_empty()),
         ("Gitlab Token", new_args.gitlab_token.is_empty()),
         ("Gitlab Project ID", new_args.project_id.is_empty()),
-        ("Mattermost URL", new_args.mm_url.is_empty()),
-        ("Mattermost Token", new_args.mm_token.is_empty()),
+        ("Mattermost URL", new_args.common.mm_url.is_empty()),
+        ("Mattermost Token", new_args.common.mm_token.is_empty()),
     ]
     .iter()
     .filter_map(|(name, is_empty)| if *is_empty { Some(*name) } else { None })
     .collect::<Vec<_>>();
+    exit_if_missing(&missing);
 
-    if !missing_required_fields.is_empty() {
-        eprintln!(
-            "Error: The following required fields are missing: {}",
-            missing_required_fields.join(", ")
-        );
-        eprintln!("Please specify with CLI flag, environment variable, or in config.toml");
-        std::process::exit(1);
+    Ok(new_args)
+}
+
+pub fn merge_fetch_settings_with_args(args: &FetchArgs) -> anyhow::Result<FetchArgs> {
+    let settings = load_settings()?;
+
+    let mut new_args = args.clone();
+
+    apply_if_empty!(new_args.common, mm_url, settings);
+    apply_if_empty!(new_args.common, mm_token, settings);
+
+    if new_args.output_dir.is_none() {
+        new_args.output_dir = settings.output_dir;
     }
+
+    debug!("merged config: {new_args:?}");
+
+    let missing = [
+        ("Mattermost URL", new_args.common.mm_url.is_empty()),
+        ("Mattermost Token", new_args.common.mm_token.is_empty()),
+    ]
+    .iter()
+    .filter_map(|(name, is_empty)| if *is_empty { Some(*name) } else { None })
+    .collect::<Vec<_>>();
+    exit_if_missing(&missing);
 
     Ok(new_args)
 }

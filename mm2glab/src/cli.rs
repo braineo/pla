@@ -1,17 +1,28 @@
 use std::fmt;
 
-use clap::{Parser, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use log::LevelFilter;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
-pub struct Args {
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum Command {
+    /// Generate a GitLab issue from a Mattermost thread (full pipeline)
+    Issue(IssueArgs),
+    /// Fetch a Mattermost thread and its media as local markdown for external agents
+    Fetch(FetchArgs),
+}
+
+/// Mattermost connection details and logging, shared by all subcommands
+#[derive(Args, Debug, Clone)]
+pub struct CommonArgs {
     /// Mattermost permanent link to the thread
     pub permalink: String,
-
-    /// Custom issue title (optional)
-    #[arg(long)]
-    pub title: Option<String>,
 
     /// Mattermost server URL
     #[arg(
@@ -30,6 +41,20 @@ pub struct Args {
         hide_default_value = true
     )]
     pub mm_token: String,
+
+    /// Log verbosity
+    #[arg(short, long, value_name = "LEVEL", default_value_t = LogLevel::Info)]
+    pub log_level: LogLevel,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct IssueArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+
+    /// Custom issue title (optional)
+    #[arg(long)]
+    pub title: Option<String>,
 
     /// GitLab server URL
     #[arg(
@@ -66,17 +91,30 @@ pub struct Args {
     #[arg(long)]
     pub no_preview: bool,
 
-    /// Modal
+    /// Ollama model to use for AI-powered issue generation
     #[arg(long, default_value = "deepseek-r1:latest")]
     pub ollama_model: String,
+
+    /// External command to generate title/description instead of Ollama.
+    /// The prompt is piped to the command's stdin and its stdout is parsed.
+    /// Example: --agent-command "claude -p"
+    #[arg(long, default_value = "", hide_default_value = true)]
+    pub agent_command: String,
 
     /// Custom prompt template for LLM
     #[arg(long, default_value = "", hide_default_value = true)]
     pub prompt: String,
+}
 
-    /// Log verbosity
-    #[arg(short, long, value_name = "LEVEL", default_value_t = LogLevel::Info)]
-    pub log_level: LogLevel,
+#[derive(Args, Debug, Clone)]
+pub struct FetchArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+
+    /// Directory to write downloaded media into. Defaults to a timestamped
+    /// directory under the system temp dir. This directory persists.
+    #[arg(long)]
+    pub output_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

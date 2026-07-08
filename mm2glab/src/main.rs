@@ -1,4 +1,5 @@
 use clap::Parser;
+use cli::Command;
 use std::process;
 
 pub mod api;
@@ -9,14 +10,24 @@ mod settings;
 
 #[tokio::main]
 async fn main() {
-    let args = cli::Args::parse();
+    let cli = cli::Cli::parse();
+
+    let log_level = match &cli.command {
+        Command::Issue(args) => args.common.log_level,
+        Command::Fetch(args) => args.common.log_level,
+    };
 
     env_logger::Builder::from_default_env()
-        .filter_level(args.log_level.into())
+        .filter_level(log_level.into())
         .format_timestamp_secs()
         .init();
 
-    if let Err(e) = services::run(args).await {
+    let result = match cli.command {
+        Command::Issue(args) => services::create_issue(args).await,
+        Command::Fetch(args) => services::fetch_thread(args).await,
+    };
+
+    if let Err(e) = result {
         eprintln!("Error: {e}");
         process::exit(1);
     }

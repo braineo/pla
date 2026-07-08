@@ -1,9 +1,9 @@
 use crate::api::gitlab::{GitLabApi, GitLabClient};
 use crate::api::mattermost::{MattermostApi, MattermostClient};
-use crate::cli::Args;
+use crate::cli::{FetchArgs, IssueArgs};
 use crate::models::gitlab::IssueChangeset;
 use crate::models::mattermost::{Conversation, Thread};
-use crate::settings::merge_settings_with_args;
+use crate::settings::{merge_fetch_settings_with_args, merge_issue_settings_with_args};
 
 use anyhow::Result;
 use chrono::{Local, TimeZone};
@@ -14,10 +14,14 @@ use ollama_rs::Ollama;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use regex::Regex;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::time::Duration;
 use tempfile::TempDir;
 use tera::{Context, Tera};
 use termimad::{self, MadSkin};
+use tokio::io::AsyncWriteExt;
+use tokio::process::Command as TokioCommand;
 
 #[derive(serde::Serialize)]
 struct IssueTemplateContext {
@@ -60,16 +64,18 @@ const CONVERSATION_TEMPLATE: &str = r"
 {{ medias }}
 ";
 
-pub async fn run(args: Args) -> Result<()> {
-    let args = merge_settings_with_args(&args)?;
+pub async fn create_issue(args: IssueArgs) -> Result<()> {
+    let args = merge_issue_settings_with_args(&args)?;
 
-    let mm_client = MattermostClient::new(args.mm_url, args.mm_token);
+    let mm_client = MattermostClient::new(args.common.mm_url, args.common.mm_token);
     let gitlab_client = GitLabClient::new(args.gitlab_url, args.gitlab_token, args.project_id);
 
-    let (_team_name, post_id) = MattermostClient::parse_permalink(&args.permalink)?;
+    let (_team_name, post_id) = MattermostClient::parse_permalink(&args.common.permalink)?;
     let thread = mm_client.get_thread(&post_id).await?;
 
     let conversation = get_conversation_from_thread(&thread, &post_id, &mm_client).await?;
+
+    let use_agent = !args.agent_command.is_empty();
 
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
@@ -77,17 +83,25 @@ pub async fn run(args: Args) -> Result<()> {
             .template("{spinner} {msg} -- {elapsed}")
             .unwrap(),
     );
-    spinner.set_message("Generating title and description from LLM...");
+    spinner.set_message(if use_agent {
+        "Generating title and description from agent command..."
+    } else {
+        "Generating title and description from LLM..."
+    });
     spinner.enable_steady_tick(Duration::from_millis(100));
 
-    let (ai_title, ai_description, ai_reason) =
-        analyze_conversation(&conversation, args.ollama_model, &args.prompt).await?;
+    let (ai_title, ai_description, ai_reason) = if use_agent {
+        analyze_conversation_with_agent(&conversation, &args.agent_command, &args.prompt).await?
+    } else {
+        analyze_conversation(&conversation, &args.ollama_model, &args.prompt).await?
+    };
 
     spinner.finish_and_clear();
 
     let title = args.title.unwrap_or(ai_title);
 
-    let description = format_issue_description(&args.permalink, &ai_description, &ai_reason)?;
+    let description =
+        format_issue_description(&args.common.permalink, &ai_description, &ai_reason)?;
 
     let (final_title, final_description) = if args.no_preview {
         (title, description)
@@ -125,6 +139,83 @@ pub async fn run(args: Args) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub async fn fetch_thread(args: FetchArgs) -> Result<()> {
+    let args = merge_fetch_settings_with_args(&args)?;
+
+    let mm_client = MattermostClient::new(args.common.mm_url, args.common.mm_token);
+
+    let (_team_name, post_id) = MattermostClient::parse_permalink(&args.common.permalink)?;
+    let thread = mm_client.get_thread(&post_id).await?;
+
+    let conversation = get_conversation_from_thread(&thread, &post_id, &mm_client).await?;
+
+    let output_dir = resolve_output_dir(args.output_dir)?;
+
+    let markdown = format_conversation_local(&conversation, &mm_client, &output_dir).await?;
+
+    // Conversation markdown goes to stdout so it can be piped into another agent.
+    println!("{markdown}");
+    // The download location goes to stderr to keep stdout clean for piping.
+    eprintln!("Media downloaded to: {}", output_dir.display());
+
+    Ok(())
+}
+
+/// Resolve the directory used to persist downloaded media. Unlike the issue
+/// path (which uses a `TempDir` that is deleted on drop), the fetch directory
+/// must persist so an external agent can read the files after mm2glab exits.
+fn resolve_output_dir(user_dir: Option<String>) -> Result<PathBuf> {
+    let dir = match user_dir {
+        Some(d) => PathBuf::from(d),
+        None => {
+            let ts = Local::now().format("%Y%m%d-%H%M%S");
+            std::env::temp_dir().join(format!("mm2glab-{ts}"))
+        }
+    };
+    std::fs::create_dir_all(&dir)?;
+    // Canonicalize so referenced image paths are absolute regardless of the
+    // agent's working directory.
+    Ok(std::fs::canonicalize(&dir).unwrap_or(dir))
+}
+
+/// Fetch-specific formatter: downloads each attachment into a persisted local
+/// directory and references it by absolute path, without uploading to GitLab.
+async fn format_conversation_local(
+    conversations: &[Conversation],
+    mm_client: &impl MattermostApi,
+    output_dir: &Path,
+) -> Result<String> {
+    let mut lines = Vec::new();
+
+    for post in conversations {
+        lines.push(format_conversation(post));
+
+        if let Some(file_ids) = &post.file_ids {
+            for file_id in file_ids {
+                match mm_client.download_file(file_id).await {
+                    Ok((filename, content, content_type)) => {
+                        // Prefix with file_id to avoid collisions between posts
+                        // that share an attachment name.
+                        let file_path = output_dir.join(format!("{file_id}-{filename}"));
+                        tokio::fs::write(&file_path, &content).await?;
+                        let path_display = file_path.display();
+
+                        if content_type.starts_with("image/") || content_type.starts_with("video/")
+                        {
+                            lines.push(format!("![{filename}]({path_display})"));
+                        } else {
+                            lines.push(format!("- [{filename}]({path_display})"));
+                        }
+                    }
+                    Err(e) => eprintln!("Failed to download file {file_id}: {e}"),
+                }
+            }
+        }
+    }
+
+    Ok(lines.join("\n\n"))
 }
 
 async fn get_conversation_from_thread(
@@ -184,18 +275,15 @@ async fn get_conversation_from_thread(
     Ok(conversations)
 }
 
-async fn analyze_conversation(
-    conversation: &[Conversation],
-    ollama_model: String,
-    prompt_template: &str,
-) -> Result<(String, String, String)> {
+/// Render the LLM prompt by formatting the conversation as "username: message"
+/// lines and substituting it into the Tera prompt template.
+fn build_prompt(conversation: &[Conversation], prompt_template: &str) -> Result<String> {
     let formatted_conv: String = conversation
         .iter()
         .map(|c| format!("{}: {}", c.username, c.message))
         .collect::<Vec<_>>()
         .join("\n");
 
-    let ollama = Ollama::default();
     let mut context = Context::new();
     context.insert("conversation", &formatted_conv);
 
@@ -203,20 +291,22 @@ async fn analyze_conversation(
     let prompt = tera.render_str(prompt_template, &context)?;
     debug!("feeding prompt to LLM:\n{prompt}");
 
-    let req = GenerationRequest::new(ollama_model, prompt);
-    let response = ollama.generate(req).await?;
+    Ok(prompt)
+}
 
-    let content = response.response;
-    debug!("received response:\n{content}");
-
+/// Parse raw model/agent output into (title, description, reason). Strips a
+/// `<think>...</think>` block into `reason`, takes the first remaining line as
+/// the title (dropping a leading "title:"), and the rest as the description
+/// (dropping a leading "description:").
+fn parse_generation_output(content: &str) -> Result<(String, String, String)> {
     let think_regex = Regex::new(r"(?ms)<think>(.*?)</think>\n?")?;
 
     let reason = think_regex
-        .captures(&content)
+        .captures(content)
         .and_then(|cap| cap.get(1))
         .map_or_else(String::new, |m| m.as_str().trim().to_string());
 
-    let content = think_regex.replace_all(&content, "").trim().to_string();
+    let content = think_regex.replace_all(content, "").trim().to_string();
 
     let mut lines = content.lines();
 
@@ -241,6 +331,75 @@ async fn analyze_conversation(
     };
 
     Ok((title, description, reason))
+}
+
+async fn analyze_conversation(
+    conversation: &[Conversation],
+    ollama_model: &str,
+    prompt_template: &str,
+) -> Result<(String, String, String)> {
+    let prompt = build_prompt(conversation, prompt_template)?;
+
+    let ollama = Ollama::default();
+    let req = GenerationRequest::new(ollama_model.to_string(), prompt);
+    let response = ollama.generate(req).await?;
+
+    debug!("received response:\n{}", response.response);
+    parse_generation_output(&response.response)
+}
+
+async fn analyze_conversation_with_agent(
+    conversation: &[Conversation],
+    agent_command: &str,
+    prompt_template: &str,
+) -> Result<(String, String, String)> {
+    let prompt = build_prompt(conversation, prompt_template)?;
+    let output = run_agent_command(agent_command, &prompt).await?;
+
+    debug!("received agent response:\n{output}");
+    parse_generation_output(&output)
+}
+
+/// Run an external command via `sh -c`, piping `prompt` to its stdin and
+/// returning its stdout. Errors on a non-zero exit status or empty output.
+async fn run_agent_command(command: &str, prompt: &str) -> Result<String> {
+    let mut child = TokioCommand::new("sh")
+        .arg("-c")
+        .arg(command)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("Failed to spawn agent command `{command}`: {e}"))?;
+
+    // Write the prompt and close stdin (signal EOF) before waiting for output,
+    // to avoid a pipe deadlock on large prompts.
+    {
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to open stdin for agent command"))?;
+        stdin.write_all(prompt.as_bytes()).await?;
+        stdin.shutdown().await?;
+    }
+
+    let output = child.wait_with_output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!(
+            "Agent command exited with status {}: {}",
+            output.status,
+            stderr.trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stdout.is_empty() {
+        return Err(anyhow::anyhow!("Agent command produced no output"));
+    }
+
+    Ok(stdout)
 }
 
 async fn select_assignees(gitlab_client: &impl GitLabApi) -> Result<Option<Vec<u64>>> {
@@ -406,5 +565,63 @@ fn preview_and_confirm(title: &str, description: &str) -> Result<(String, String
         }
         "Cancel" => Err(anyhow::anyhow!("Operation cancelled by user")),
         _ => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_generation_output, run_agent_command};
+
+    #[tokio::test]
+    async fn agent_command_pipes_stdin_to_stdout() {
+        // `cat` echoes the piped prompt straight back to stdout.
+        let out = run_agent_command("cat", "hello from prompt").await.unwrap();
+        assert_eq!(out, "hello from prompt");
+    }
+
+    #[tokio::test]
+    async fn agent_command_errors_on_nonzero_exit() {
+        let err = run_agent_command("false", "prompt").await.unwrap_err();
+        assert!(err.to_string().contains("exited with status"));
+    }
+
+    #[tokio::test]
+    async fn agent_command_errors_on_empty_output() {
+        let err = run_agent_command("true", "prompt").await.unwrap_err();
+        assert!(err.to_string().contains("no output"));
+    }
+
+    #[test]
+    fn parses_prefixed_title_and_description() {
+        let (title, description, reason) =
+            parse_generation_output("title: My Issue\ndescription: A body line\nmore body")
+                .unwrap();
+        assert_eq!(title, "My Issue");
+        assert_eq!(description, "A body line\nmore body");
+        assert_eq!(reason, "");
+    }
+
+    #[test]
+    fn strips_think_block_into_reason() {
+        let content = "<think>because reasons</think>\ntitle: T\ndescription: D";
+        let (title, description, reason) = parse_generation_output(content).unwrap();
+        assert_eq!(title, "T");
+        assert_eq!(description, "D");
+        assert_eq!(reason, "because reasons");
+    }
+
+    #[test]
+    fn falls_back_to_defaults_when_unformatted() {
+        let (title, description, _) = parse_generation_output("").unwrap();
+        assert_eq!(title, "Untitled Issue");
+        assert_eq!(description, "No description provided.");
+    }
+
+    #[test]
+    fn handles_output_without_prefixes() {
+        let (title, description, _) =
+            parse_generation_output("Just a title\nand a description").unwrap();
+        assert_eq!(title, "Just a title");
+        assert_eq!(description, "and a description");
     }
 }
